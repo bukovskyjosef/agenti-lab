@@ -1,0 +1,65 @@
+name: Investigation / audit
+description: Investigate evidence, a workflow problem, adoption experience or hypothesis without changing the target standard.
+title: "[INVESTIGATION] "
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question / observed problem
+      description: What are we trying to learn, verify or falsify?
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it matters
+      description: What target workflow quality, cost, reliability or adoption concern motivates this investigation?
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence sources
+      description: Link exact agenti refs, real-project issues/PRs, experiments or other durable evidence. Do not copy the full target standard.
+      placeholder: |
+        - bukovskyjosef/agenti: ...
+        - FamilyHelper/Kvazi/...: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: limits
+    attributes:
+      label: Known limits / uncertainty
+      description: What can the available evidence not prove yet?
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Responsible lab mode
+      options:
+        - Investigator
+        - Reviewer / Critic
+        - Asistentka
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Expected output
+      description: Define what would count as a useful conclusion or decision-ready result.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: boundary
+    attributes:
+      label: Repository boundary check
+      options:
+        - label: This issue does not itself change the current target standard in bukovskyjosef/agenti.
+          required: true
+        - label: If a target change is recommended, it will use the promotion workflow rather than being treated as already authorized.
+          required: true
