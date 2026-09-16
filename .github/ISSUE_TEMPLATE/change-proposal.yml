@@ -1,0 +1,83 @@
+name: Target change proposal
+description: Prepare a decision-ready proposal for a possible change to the target standard in bukovskyjosef/agenti.
+title: "[PROPOSAL] "
+body:
+  - type: dropdown
+    id: status
+    attributes:
+      label: Proposal status
+      options:
+        - DRAFT
+        - READY_FOR_CRITIQUE
+        - AWAITING_HUMAN
+        - PROMOTE
+        - ITERATE
+        - REJECT
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem in the current target model
+      description: Describe the problem and point to the exact current agenti rule/ref being evaluated.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Summarize durable evidence and link the underlying investigations, real-project observations or experiments.
+    validations:
+      required: true
+
+  - type: textarea
+    id: options
+    attributes:
+      label: Material options
+      description: Usually 2–3 materially different options, including keeping the current model when relevant, with consequences/trade-offs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: Recommendation
+      description: Optional. Keep it distinct from the Human/Product Owner decision.
+
+  - type: textarea
+    id: target_impact
+    attributes:
+      label: Expected target impact
+      description: Which rule families/files/automation contracts in agenti would likely change if promoted? This is impact analysis, not implementation authorization.
+    validations:
+      required: true
+
+  - type: textarea
+    id: critique
+    attributes:
+      label: Independent critique / review
+      description: Link or summarize independent critique for significant proposals. The proposal author must not present self-review as independent review.
+
+  - type: textarea
+    id: human
+    attributes:
+      label: Human decision
+      description: Record explicit REJECT / ITERATE / PROMOTE and any exact choice/conditions. Leave unresolved until the Human/Product Owner decides.
+
+  - type: textarea
+    id: target_handoff
+    attributes:
+      label: Target handoff
+      description: After PROMOTE, link the new issue/decision in bukovskyjosef/agenti. The target artifact becomes authoritative for implementation.
+
+  - type: checkboxes
+    id: boundary
+    attributes:
+      label: Authority boundary
+      options:
+        - label: This proposal is not the current target specification.
+          required: true
+        - label: PROMOTE requires a separate linked target artifact in bukovskyjosef/agenti before implementation is authorized.
+          required: true
