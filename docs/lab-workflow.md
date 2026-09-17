@@ -1,134 +1,145 @@
 # Lab workflow
 
-Tento dokument definuje pracovní model pro vývoj standardu publikovaného v `bukovskyjosef/agenti`.
+Tento dokument definuje jednoduchý pracovní model pro vývoj produktu `bukovskyjosef/agenti`.
 
-## 1. Intake
+Lab sám **nemusí být autonomní**. Human/Product Owner může být ruční koordinátor, který jednotlivým agentům zadává konkrétní roli a Issue.
 
-Vstupem může být:
+## 1. Issue je jednotka práce
 
-- problém pozorovaný při adopci,
-- auditní nález,
-- otázka nad cílovým standardem,
-- nový workflow/release nápad,
-- failure/incident agentní spolupráce,
-- experimentální hypotéza.
+Každá smysluplná otevřená práce nad etalonem má durable Issue v `agenti-lab`.
 
-Vznikne Issue v `agenti-lab`. `agenti` se pro tento účel nepoužívá.
+Issue může představovat například:
 
-## 2. Investigation / Analysis
+- audit nebo review,
+- investigation / analýzu,
+- zpracování findings,
+- rozhodovací bod,
+- experiment,
+- návrh změny etalonu,
+- implementaci schválené změny,
+- publication nebo post-publish verification.
 
-Investigator nebo Analyst:
+Není potřeba složitý univerzální lifecycle. Stav musí být dostatečně jasný z Issue a souvisejících artefaktů, aby další agent poznal, co je hotové a co zbývá.
 
-- načte relevantní aktuální zdroje z `agenti/main` a případně z reálných adopcí,
-- rozlišuje evidence, interpretaci, hypotézu a návrh,
-- minimalizuje scope otázky,
-- dokumentuje limity evidence,
-- porovnává materiálně odlišné varianty pouze tam, kde je to užitečné,
-- nemění publikovaný etalon.
+## 2. Human dispatch
 
-Typický výstup: `NO_CHANGE`, `MORE_EVIDENCE_NEEDED` nebo `PROPOSAL_READY`.
+Human může spustit agenta jednoduchou instrukcí typu:
 
-## 3. Design / experiment
+> Jsi Reviewer. Pracuj na Issue #N v `bukovskyjosef/agenti-lab`. Řiď se repozitářem.
 
-Pokud je potřeba konkrétní návrh nebo prototyp, práce může pokračovat v lab branchi/PR.
+Agent si načte:
 
-Větve mohou oddělit:
+1. účel labu z root README,
+2. přidělené Issue včetně komentářů a linked artefaktů,
+3. pravidla své role z `AGENTS.md`,
+4. pouze relevantní část aktuálního `agenti/main`.
 
-- alternativní varianty,
-- nezávislé vrstvy problému,
-- experimenty,
-- konkrétní reviewovatelnou úpravu lab artefaktů.
+Agent **nepotřebuje automaticky pokračovat na další Issue** a nemá si bez pověření přibírat práci.
 
-Experimentální stav nikdy není automaticky cílovou specifikací.
+## 3. Analysis / Investigation
 
-## 4. Independent critique / review
+Analyst nebo Investigator:
 
-Významnou změnu před Human rozhodnutím nebo publikací kontroluje jiná logická instance Reviewer/Critic.
+- ověří skutečný problém proti aktuálnímu etalonu,
+- shromáždí evidence,
+- rozliší fakta, interpretaci a doporučení,
+- minimalizuje scope,
+- připraví materiální varianty pouze tam, kde je potřeba Human volba,
+- durable zapíše závěr do Issue.
 
-Kontroluje zejména:
+Možný výsledek je například:
 
-- zda evidence opravdu podporuje problém,
-- zda se lokální zkušenost nepovyšuje bezdůvodně na univerzální pravidlo,
-- zda nebyla přehlédnuta jednodušší varianta,
-- zda scope neexpandoval oproti otázce,
-- zda se nezvyšuje procesní/tokenová režie bez konkrétní hodnoty,
-- zda návrh zachovává Human authority a oddělení rolí,
-- zda cílový dokumentační model zůstane čistý a neduplicitní.
+- nic měnit není potřeba,
+- potřebujeme další evidence,
+- existuje konkrétní návrh změny,
+- potřebujeme Human decision.
 
-Reviewer/Critic nesmí vydat svůj návrh za nezávislé review.
+## 4. Reviewer
 
-## 5. Human decision
+Reviewer je jiná logická instance než autor kontrolovaného návrhu nebo změny.
 
-Decision-ready bod zpracuje Asistentka s Human/Product Ownerem.
+Review může kontrolovat:
 
-Předloží:
+- auditní závěr,
+- návrh změny standardu,
+- zpracování předchozích findings,
+- konkrétní lab branch/PR,
+- publikovaný stav `agenti/main`.
 
-- problém,
-- klíčovou evidence a její limity,
-- relevantní varianty a trade-offy,
+Reviewer:
+
+- pracuje z durable artefaktů, ne z ústního/chatového převyprávění,
+- findings zapisuje do Issue/PR/review,
+- neopravuje kontrolovanou práci jako její autor,
+- odlišuje skutečný defect od doporučení a od bodu vyžadujícího Human rozhodnutí.
+
+## 5. Zpracování findings
+
+Pokud review vrátí připomínky, Human může přidělit Issue jiné instanci jako Analyst/Editor/Implementer.
+
+Ta:
+
+- zpracuje pouze relevantní findings,
+- neexpanduje scope mimo Issue,
+- pokud finding vyžaduje nový materiální směr, připraví Human decision místo jeho automatického rozhodnutí,
+- zanechá nový durable výsledek pro další review.
+
+Cyklus se může opakovat, dokud není návrh dostatečně kvalitní.
+
+## 6. Human decision
+
+Materiální změnu směru produktu `agenti` schvaluje Human/Product Owner.
+
+Decision-ready agent má člověku předložit:
+
+- stručný problém,
+- evidence a jejich limity,
+- relevantní varianty/trade-offy,
 - případné doporučení oddělené od rozhodnutí.
 
-Human zvolí typicky `REJECT`, `ITERATE` nebo `APPROVE/PUBLISH`.
+Human decision se zapíše do příslušného lab Issue. Samostatná role Asistentky je v labu volitelná; člověk může rozhodovací dialog vést přímo s Analystem nebo jiným pověřeným agentem.
 
-Rozhodnutí se zapíše do původního lab Issue. Žádný decision Issue se kvůli tomu nevytváří v `agenti`.
+## 7. Příprava změny etalonu
 
-## 6. Publication preparation
+Po schválení směru Editor/Implementer připraví přesný cílový obsah.
 
-Po `APPROVE/PUBLISH` se v labu připraví přesný výsledný target.
+Pro větší změnu je vhodná lab branch/PR. Pro malou změnu může přesný návrh existovat přímo v Issue, pokud je stejně jednoznačně reviewovatelný.
 
-Platí:
+Před publikací musí jiná instance Reviewer ověřit **přesný obsah, který má být publikován**, nikoli jen obecnou myšlenku.
 
-- žádný nový scope během publikace,
-- odstranění lab-only kontextu a historických vysvětlení,
-- jeden aktuální kanonický owner každé rule family,
-- publikovaný obsah musí být pochopitelný bez labu,
-- pokud finalizace mění schválený význam, návrh se vrací do decision/review kroku.
+## 8. Publish do `agenti/main`
 
-## 7. Publish to `agenti/main`
+Po explicitním Human schválení a požadovaném independent review smí Publisher:
 
-Publisher:
+1. načíst přesný schválený target,
+2. zapsat jej do `agenti/main`,
+3. nepřenášet do produktu lab historii, diskusi, rejected variants ani otevřené otázky,
+4. nepřidávat během publish nový scope,
+5. zapsat výsledný target commit SHA zpět do lab Issue.
 
-1. načte schválený lab Issue a finální review evidence,
-2. ověří přesný obsah k publikaci,
-3. aktualizuje `agenti/main` přímo na čistý cílový stav,
-4. nepřidává v `agenti` Issue, decision record ani feature branch,
-5. zkontroluje, že target tree neobsahuje lab artefakty nebo otevřené otázky,
-6. zapíše výsledný target commit SHA do lab Issue.
+V `agenti` se kvůli publish nevytváří vlastní Issue nebo feature branch.
 
-Publikace je integrační krok standardu, nikoli další kolo jeho návrhu.
+## 9. Post-publish verification
 
-## 8. Post-publish verification
+Po publish jiná logická instance ověří alespoň:
 
-Po publikaci se ověří alespoň:
+- že `agenti/main` odpovídá schválenému targetu,
+- že dokumentace je interně konzistentní a cold-startable,
+- že neobsahuje pracovní lab artefakty,
+- že běžný konzument nemusí číst `agenti-lab`, aby pochopil aktuální standard.
 
-- cold-start čitelnost `agenti`,
-- interní odkazy a konzistence,
-- že target nevyžaduje `agenti-lab` k pochopení aktuálního pravidla,
-- že v `agenti` není otevřený pracovní backlog standardu,
-- že publish odpovídá Human-approved výsledku.
+Pokud verification najde problém, zapíše jej do lab Issue a práce se vrátí do corrective loopu.
 
-Širší audit může běžet jako samostatné lab Issue.
+## 10. Durable handoff
 
-## 9. Handoff destinations
-
-| Událost | Durable místo |
+| Výsledek | Kam patří |
 |---|---|
-| otázka / audit / hypotéza | `agenti-lab` Issue |
-| evidence / investigation | lab Issue comment nebo lab artefakt |
-| experiment / návrh souborů | lab branch / PR |
-| independent critique | lab Issue/PR review |
-| Human decision | původní lab Issue |
-| publish authorization | původní lab Issue |
-| publikovaný cílový stav | `agenti/main` |
-| publish evidence / target SHA | lab Issue |
+| analysis / findings / návrh | `agenti-lab` Issue |
+| experiment nebo větší editace | lab branch / PR |
+| independent review | lab Issue / PR review |
+| Human decision | lab Issue |
+| přesný approved publication target | lab Issue / reviewed lab PR |
+| publikovaný výsledek | `agenti/main` |
+| target commit SHA + post-publish verification | lab Issue |
 
-## 10. Completion
-
-Lab Issue je dokončené, pokud nastane například:
-
-- `NO_CHANGE`,
-- `REJECTED`,
-- `PUBLISHED`,
-- `CLOSED_INCONCLUSIVE`.
-
-`PUBLISHED` znamená, že čistý cílový stav už existuje v `agenti/main` a publish evidence je durable zaznamenaná v labu.
+Chat slouží člověku jako pohodlné rozhraní. Další agent ale musí být schopen pokračovat z repozitáře.
