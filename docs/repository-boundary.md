@@ -1,71 +1,91 @@
-# Repository boundary: agenti vs agenti-lab
+# Repository boundary: `agenti` vs `agenti-lab`
 
-Tento dokument je kanonickým vlastníkem hranice mezi cílovým standardem a jeho laboratoří.
+Tento dokument je kanonickým vlastníkem hranice mezi publikovaným etalonem a jeho vývojovým prostředím.
 
-## 1. Cílový repozitář `bukovskyjosef/agenti`
+## 1. `bukovskyjosef/agenti` — publikovaný produkt
 
-`agenti` vlastní **aktuální cílový stav** agentního workflow.
+`agenti` vlastní **pouze aktuální cílový výsledek**.
 
-Patří do něj:
+Jeho účel je umožnit cold-start instrukci typu:
 
-- aktuální normativní pravidla,
-- role a kompetence cílového systému,
-- cílový issue/PR/handoff/automation model,
-- rozhodnutí a work itemy, které autorizují konkrétní změnu cílového standardu,
-- implementace, review a integrace takové změny,
-- adopční návod pro produktové repozitáře.
+> Přečti `bukovskyjosef/agenti` a připrav nový repozitář podle tohoto standardu.
 
-Agent musí být schopen pochopit současný standard bez čtení `agenti-lab`.
+Proto má ve steady state platit:
 
-## 2. Laboratoř `bukovskyjosef/agenti-lab`
+- `main` je jediný autoritativní publikovaný stav,
+- aktuální strom obsahuje jen dokumentaci potřebnou k adopci standardu,
+- žádné open Issues, decision backlog, audit queue ani review tasks,
+- žádné pracovní feature branches nebo vývojové PR,
+- žádný decision/history adresář v aktuálním stromu,
+- žádná self-development governance, která by z `agenti` dělala druhé pracovní prostředí.
 
-`agenti-lab` vlastní **meta-práci nad standardem**, nikoli standard samotný.
+Historie Git commitů nebo starých uzavřených GitHub artefaktů může fyzicky existovat, ale **není součástí aktuálního standardu ani běžné kontextové cesty**.
 
-Patří do něj:
+## 2. `bukovskyjosef/agenti-lab` — vývoj standardu
 
-- evidence z reálných adopcí,
-- audity cílového modelu,
-- experimenty a prototypy workflow,
-- srovnání alternativ,
-- retrospektivy a failure analysis,
-- otevřené otázky a change proposals,
-- nezávislá kritika návrhů před promotion.
+Veškerá meta-práce nad etalonem patří sem:
 
-Lab artefakt může tvrdit „navrhujeme změnit X“, ale nesmí tvrdit „aktuální pravidlo je X“, pokud pouze neodkazuje na skutečný kanonický stav v `agenti`.
+- Issues a otevřené body,
+- Human/Product Owner decisions,
+- audity a retrospektivy,
+- evidence z reálných projektů,
+- experimenty a prototypy,
+- alternativy a change proposals,
+- pracovní branches a PR,
+- nezávislé critique/review,
+- publikační handoff a post-publish audit.
+
+Lab smí standard zkoumat a připravovat jeho změnu, ale aktuální cílovou pravdu čte z `agenti/main`.
 
 ## 3. Autorita
 
-Human/Product Owner rozhoduje, zda se lab návrh:
+Human/Product Owner rozhoduje o změně etalonu.
 
-- **REJECT** — odmítne,
-- **ITERATE** — vrátí k dalšímu zkoumání,
-- **PROMOTE** — předá do `agenti` jako kandidát na změnu cílového standardu.
+Decision outcome může být například:
 
-`PROMOTE` ještě samo nemění cílový standard. Musí vzniknout linked artefakt v `agenti`, který obsahuje dostatek aktuálního kontraktu pro cílový proces.
+- **REJECT** — návrh se nepublikuje,
+- **ITERATE** — pokračuje investigation/design v labu,
+- **APPROVE / PUBLISH** — lab smí připravit a publikovat konkrétní cílový stav.
 
-## 4. Promotion contract
+Absence odpovědi není approval.
 
-Promoter / Bridge při `PROMOTE`:
+## 4. Publication contract
 
-1. vytvoří v `agenti` nový Intake/Analysis/Decision work item podle povahy změny,
-2. uvede odkaz na zdrojový lab Issue,
-3. přenese pouze schválený problém, lidské rozhodnutí, relevantní evidence summary, scope/out-of-scope a požadovaný výsledek,
-4. nekopíruje zbytečně celý výzkumný deník,
-5. nepovažuje lab návrh za implementační oprávnění, pokud cílový issue ještě není Ready,
-6. zapíše do lab Issue odkaz na cílový artefakt a označí promotion stav.
+Po Human approval se nevytváří implementační Issue v `agenti`.
 
-Od tohoto okamžiku je pro konkrétní implementaci autoritativní cílový artefakt v `agenti`. Pokud se jeho kontrakt během cílové Analysis změní, lab se zpětně nepřepisuje; zůstává historickým zdrojem původní evidence a návrhu.
+Místo toho lab:
 
-## 5. Zpětná vazba z cíle do labu
+1. finalizuje přesný cílový obsah v lab artefaktech/branchi,
+2. provede požadované nezávislé review v labu,
+3. Publisher rekonstruuje schválený stav z durable lab evidence,
+4. publikuje pouze čistý výsledný standard do `agenti/main`,
+5. ověří, že v targetu nezůstala lab historie, alternativy, otevřené otázky ani interní rozhodovací stopa,
+6. zaznamená publikovaný target commit zpět do lab Issue.
 
-Během implementace/review v `agenti` mohou vzniknout:
+`agenti/main` se tím stává novou cílovou pravdou.
 
-- **DEFECT** vůči schválenému kontraktu — řeší se v `agenti`, nevrací se do labu jako výzkumný problém.
-- **DECISION_REQUIRED** pro právě implementovanou cílovou změnu — řeší se podle governance `agenti`; pokud vyžaduje nový širší výzkum, může vzniknout linked lab Issue.
-- **RECOMMENDATION / nová hypotéza / systémový problém standardu** — vhodný kandidát na nové Intake/Investigation Issue v `agenti-lab`, nikoli automatické rozšíření aktuálního cílového scope.
+## 5. Co se nesmí při publikaci přenášet
 
-## 6. Historické artefakty
+Pokud to není samo součástí aktuálního pravidla, do `agenti` nepatří:
 
-Staré audity, decisions a remediation issues, které už vznikly v `agenti` před rozdělením repozitářů, se **nestěhují ani nemažou**. Zůstávají tam jako platná historická auditní stopa a odkazy se nesmí rozbíjet.
+- auditní reporty,
+- rozhodovací historie,
+- rejected variants,
+- pracovní komentáře,
+- lab statusy,
+- odkazy nutné jen k pochopení vývoje etalonu,
+- issue/PR workflow určený k vývoji etalonu samotného.
 
-Od zavedení tohoto boundary modelu má nová obecná meta-diskuse, audit modelu, experiment nebo návrh budoucího redesignu začínat v `agenti-lab`. Konkrétní autorizovaná změna cílového standardu se realizuje v `agenti`.
+Publikovaný produkt musí být samonosný.
+
+## 6. Zpětná vazba z adopcí
+
+Problém objevený při adopci standardu v Kvazi, FamilyHelperu nebo jiném projektu se vrací jako nové Issue do `agenti-lab`.
+
+Reálný projekt se kvůli tomu nesmí stát skrytým místem, kde se univerzální standard potichu redefinuje.
+
+## 7. Historické artefakty
+
+Pre-split Issues/PR/commity, které už existují v `agenti`, se nemusí technicky mazat, pokud to GitHub neumožňuje. Musí však být uzavřené, neaktivní a nesmí být součástí aktuální dokumentační mapy nebo pracovního procesu.
+
+Aktuální vývojová pravda od zavedení této hranice patří výhradně do `agenti-lab`.
