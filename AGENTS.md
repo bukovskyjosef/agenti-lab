@@ -4,9 +4,9 @@ Tento repozitář je pracovní laboratoř pro vývoj publikovaného standardu `b
 
 ## 1. Nejdřív pochop účel
 
-Přečti kořenový [`README.md`](README.md). Cílem není autonomizovat samotný lab, ale zlepšovat produkt `agenti`: obecný standard pro efektivní práci člověka se specializovanými agenty a maximální vhodnou automatizací tvorby produktu.
+Přečti kořenový [`README.md`](README.md). Cílem není autonomizovat samotný lab, ale zlepšovat produkt `agenti`: referenční standard pro efektivní práci člověka se specializovanými agenty a maximální vhodnou automatizací tvorby a rozvoje **softwarového produktu**.
 
-Produkt nemusí být software; může jít i o dokument, analýzu, kreativní dílo nebo jiný verzovaný artefakt.
+`agenti` je záměrně software-product standard. Nemá být zobecňován na univerzální workflow pro knihy, povídky, obecné dokumenty nebo jiné nesofwarové artefakty. Přenositelnost některých principů mimo software je možný vedlejší efekt, nikoli designový požadavek.
 
 ## 2. Pracuj na přiděleném Issue
 
