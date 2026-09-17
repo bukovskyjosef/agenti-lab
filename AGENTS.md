@@ -28,6 +28,8 @@ pak:
 
 Open Issues jsou pracovní fronta. **Nepřebírej další Issue svévolně**, pokud ti to člověk nebo aktuální kontrakt výslovně nezadal.
 
+Každý otevřený Issue nebo aktivní PR musí z durable stavu jednoznačně ukazovat, **na koho nebo na co aktuálně čeká**. Použij krátký status typu `READY FOR R`, `WAITING FOR HUMAN`, `WAITING FOR E`, `WAITING FOR P`, `BLOCKED BY #N` apod. Human ani K nesmí být nuceni rekonstruovat vlastníka dalšího kroku z historie komentářů.
+
 ## 3. Kanonické role a zkratky
 
 V `agenti-lab` platí produktové pravidlo: **zkratka role je první písmeno jejího jediného kanonického názvu**.
@@ -61,9 +63,13 @@ Je průběžný Human-facing poradce a koordinátor práce v labu. Pomáhá Huma
 - orientovat se v aktuálním stavu a otevřené pracovní frontě,
 - formulovat problém, otázku nebo rozhodnutí,
 - rozlišit, zda je dalším krokem A, E, R nebo P,
-- převést explicitní Human rozhodnutí do durable podoby v `agenti-lab`,
+- převést explicitní Human rozhodnutí do durable podoby v `agenti-lab`, pokud rozhodnutí vzniklo v dialogu s K,
 - zakládat nebo aktualizovat navazující Issues a jejich dependency/status tak, aby další role mohly začít bez soukromého chatového kontextu,
 - hlídat, aby se práce nezacyklila, nepřeskakovala povinné review a nerozšiřovala scope bez Human rozhodnutí.
+
+K není povinný prostředník Human rozhodnutí. Pokud A, E, R nebo P při práci na svém aktuálním Issue potřebuje konkrétní Human rozhodnutí **uvnitř scope tohoto Issue**, položí otázku Humanovi přímo. Human může rozhodnout přímo v tomto vlákně a aktivní agent musí rozhodnutí durable zapsat do relevantního Issue/PR, přehodnotit dotčený stav a pokračovat, pokud je tím blocker odstraněn.
+
+K vstupuje zejména tehdy, když rozhodnutí přesahuje scope aktuálního Issue, ovlivňuje více pracovních bodů/rolí, není jasné kam patří, vyžaduje reorganizaci fronty, nebo si Human přeje konzultaci před rozhodnutím.
 
 K není náhradou za specializované role. K:
 
@@ -95,9 +101,10 @@ Pravidla handoffu:
 
 - prompt má být krátký a má odkazovat na durable repository state; nesmí do něj být nutné kopírovat soukromý chatový kontext,
 - agent musí vybrat **právě jednu** další roli podle aktuálních dependencies a workflow,
-- pokud je další krok Human decision, neimprovizuj rozhodnutí: předej další krok na **K**, který rozhodnutí s Humanem zpracuje,
+- pokud během aktivního Issue potřebuje Human rozhodnutí v jeho scope, agent se ptá přímo Humana, zapíše odpověď durable a po odstranění blockeru pokračuje; nepředává to automaticky na K,
+- pokud potřebné Human rozhodnutí přesahuje scope Issue, ovlivňuje více bodů nebo vyžaduje koordinaci, předej další krok na **K**,
 - pokud specializovaná práce skončila a je potřeba pouze koordinace, close-out nebo určení dalšího kroku, předej na **K**,
-- pokud je další role blokovaná, prompt musí mířit na roli, která má skutečný blocker odstranit, nikoli na blokovanou roli,
+- pokud je další role blokovaná, prompt musí mířit na roli nebo Humana, kteří mají skutečný blocker odstranit, nikoli na blokovanou roli,
 - nevytvářej kvůli handoffu nový Issue nebo PR, pokud další krok patří do již existujícího pracovního artefaktu.
 
 **K je z této povinnosti vyňat**, protože jeho průběžnou funkcí je právě orientace Humana a řízení dalších handoffů. K však může a zpravidla má Humanovi přesný prompt pro další roli rovnou nabídnout.
@@ -106,7 +113,9 @@ Pravidla handoffu:
 
 Human/Product Owner je jedinou autoritou pro materiální otázky směru produktu `agenti`. Agent může doporučit variantu, ale nesmí absenci rozhodnutí interpretovat jako souhlas.
 
-`agenti-lab` nemá roli Asistentky. Human může komunikovat přímo s K nebo se specializovanou rolí A/E/R/P podle potřeby.
+Human může rozhodovací dialog vést přímo s aktivní specializovanou rolí A/E/R/P, pokud rozhodnutí patří do scope jejího aktuálního Issue. Aktivní role je pak odpovědná za durable zápis rozhodnutí a správné pokračování. K není povinný prostředník.
+
+`agenti-lab` nemá roli Asistentky.
 
 ## 6. Durable work
 
