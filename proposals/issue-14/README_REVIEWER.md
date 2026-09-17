@@ -1,1 +1,0 @@
-Reviewer entrypoint: read Issue #14, Issue #13 decisions, `REVIEW_CHECKLIST.md`, then review all complete snapshots under `target/` against published baseline `f4f826a7c03e2dca6a3ed5eb64d29b1d6512b057`. Do not publish.
