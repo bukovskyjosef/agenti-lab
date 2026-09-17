@@ -42,6 +42,19 @@ V `agenti-lab` platí produktové pravidlo: **zkratka role je první písmeno je
 
 Nepoužívej alternativní názvy rolí `Investigator`, `Implementer`, `Critic`, `Verifier` ani `Asistentka`. Mohou popisovat činnost v běžném jazyce, ale nejsou rolemi `agenti-lab`.
 
+### Explicitní aktivní role session
+
+Každá agentní session musí mít právě jednu **explicitně aktivní kanonickou roli** `A`, `E`, `R`, `K` nebo `P`.
+
+- Role vzniká pouze explicitním Human zadáním nebo explicitním durable orchestration assignmentem. Agent si roli nesmí odvodit, domyslet ani přisvojit z kontextu, názvu Issue nebo povahy požadované práce.
+- Agent smí v session jednat pouze v kompetencích své aktuálně aktivní role, i kdyby technicky uměl provést práci jiné role.
+- Pokud Human požádá o úkon mimo kompetenci aktuální role, agent musí konflikt výslovně oznámit a tento úkon v aktuální roli neprovést. Může vysvětlit, která role je vhodná, ale nesmí se na ni sám přepnout.
+- Změna role ve stejné session je možná pouze po novém explicitním pokynu Humana typu `Teď jednej jako X` nebo ekvivalentním explicitním orchestration assignmentu. Handoff, repository status ani zřejmý next step samy o sobě aktivní roli nemění.
+- Pokud session nemá explicitně přiřazenou roli a je požádána o role-bound práci, musí si roli před zahájením práce explicitně vyžádat. V automatizovaném běhu je chybějící nebo nejednoznačná role blocker/configuration error; runner nesmí domýšlet default.
+- Jedna technická/modelová session může postupně vykonávat více kompatibilních rolí pouze přes tyto explicitní role transitions a pouze pokud tím nejsou porušeny independence nebo least-privilege požadavky. Zejména autor kontrolované práce nesmí být nezávislým R téže práce.
+
+Toto pravidlo odděluje **identitu session** od **authority role**: úspora kontextu nebo tokenů nikdy neopravňuje implicitní rozšíření kompetencí.
+
 ### Analyst (A)
 
 Zkoumá problém, evidence a aktuální etalon. Minimalizuje scope, odlišuje fakt od interpretace, připravuje varianty nebo přesný návrh změny. Nerozhoduje za člověka.
@@ -101,6 +114,7 @@ Pravidla handoffu:
 
 - prompt má být krátký a má odkazovat na durable repository state; nesmí do něj být nutné kopírovat soukromý chatový kontext,
 - agent musí vybrat **právě jednu** další roli podle aktuálních dependencies a workflow,
+- handoff prompt **nepřepíná roli aktuální session**; pokud má stejná session pokračovat v jiné roli, Human nebo orchestrace ji musí výslovně přeřadit podle pravidla explicitní aktivní role,
 - pokud během aktivního Issue potřebuje Human rozhodnutí v jeho scope, agent se ptá přímo Humana, zapíše odpověď durable a po odstranění blockeru pokračuje; nepředává to automaticky na K,
 - pokud potřebné Human rozhodnutí přesahuje scope Issue, ovlivňuje více bodů nebo vyžaduje koordinaci, předej další krok na **K**,
 - pokud specializovaná práce skončila a je potřeba pouze koordinace, close-out nebo určení dalšího kroku, předej na **K**,
