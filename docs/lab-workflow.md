@@ -117,7 +117,31 @@ Po publish jiná logická instance R ověří alespoň:
 
 Pokud R najde problém, zapíše jej do lab Issue a práce se vrátí do corrective loopu.
 
-## 10. Durable handoff
+## 10. Povinný Human-facing handoff
+
+Po každém dokončeném pověření musí **A, E, R a P** v chatu Humanovi explicitně říct, co má zadat dál. Cílem je, aby Human nemusel znovu rekonstruovat workflow ani formulovat prompt.
+
+Agent musí z aktuálního durable stavu určit **jedinou další kanonickou roli** a odpověď ukončit ve formátu:
+
+> **Dle pravidel je teď potřeba zadat R (Reviewerovi) úkol:**
+>
+> `Jsi R. Pracuj na Issue #N v repozitáři bukovskyjosef/agenti-lab. Řiď se repozitářem. <stručné upřesnění jen pokud je nutné>`
+
+Role se nahradí skutečným dalším krokem `A`, `E`, `R`, `K` nebo `P`.
+
+Handoff musí splnit:
+
+- prompt je copy-paste ready,
+- prompt odkazuje na repository state a nevyžaduje přenášet soukromý chatový kontext,
+- agent vybere právě jednu další roli,
+- při Human decision se další krok předá na K,
+- při close-outu nebo potřebě koordinace se další krok předá na K,
+- blokované roli se úkol nepředává; prompt míří na roli, která skutečně odstraní blocker,
+- handoff sám o sobě nevytváří nový Issue/PR, pokud existující artefakt stačí.
+
+K je z povinného formátu vyňat, protože jeho průběžnou funkcí je právě koordinace Humana a dalších handoffů. Může však stejný formát používat pro pohodlí a konzistenci.
+
+## 11. Durable handoff
 
 | Výsledek | Kam patří |
 |---|---|
@@ -129,4 +153,4 @@ Pokud R najde problém, zapíše jej do lab Issue a práce se vrátí do correct
 | publikovaný výsledek | `agenti/main` |
 | target commit SHA + post-publish review | lab Issue |
 
-Chat slouží člověku jako pohodlné rozhraní. Další agent ale musí být schopen pokračovat z repozitáře.
+Chat slouží člověku jako pohodlné rozhraní. Další agent ale musí být schopen pokračovat z repozitáře. Povinný Human-facing prompt je navigační pomůcka pro Humana, nikoli náhrada durable handoffu.
