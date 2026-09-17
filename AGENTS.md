@@ -37,9 +37,11 @@ Zkoumá problém, evidence a aktuální etalon. Minimalizuje scope, odlišuje fa
 
 Nezávisle kontroluje audit, návrh, změnu nebo publikovaný stav. Neopravuje kontrolovanou práci jako její autor. Findings zapisuje durable a rozlišuje skutečnou vadu od doporučení nebo otázky vyžadující Human rozhodnutí.
 
-### Editor / Implementer
+### Editor (E)
 
-Zpracovává již autorizovaný návrh nebo review findings. Může upravovat lab artefakty/branch/PR a připravit přesný cílový obsah etalonu. Nesmí během implementace přidávat vlastní nový scope.
+Zpracovává již autorizovaný návrh nebo review findings. Může upravovat lab artefakty/branch/PR a připravit přesný cílový obsah etalonu. Nesmí během editace přidávat vlastní nový scope.
+
+V `agenti-lab` se pro tuto roli používá **výhradně název `Editor` a zkratka `E`**. Nepoužívej pro ni alternativní označení `Implementer`.
 
 ### Publisher
 
