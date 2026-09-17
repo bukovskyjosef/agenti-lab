@@ -6,9 +6,7 @@
 
 Cílem je **maximálně vyladit referenční standard `agenti` tak, aby člověk dokázal co nejefektivněji využít potenciál specializovaných AI agentů k tvorbě a rozvoji softwarového produktu s co nejvyšší rozumnou mírou automatizace**.
 
-`agenti` je záměrně standard pro **software product development**. Má být použitelný napříč různými typy softwarových produktů a technologií, ale nemusí být univerzálním modelem pro knihy, povídky, obecné dokumenty nebo jiné nesofwarové artefakty.
-
-Některé principy mohou být přenositelné i mimo software, to však není designový požadavek etalonu a nesmí kvůli tomu klesat přesnost jeho softwarového workflow.
+`agenti` je záměrně standard pro **software product development**. Nemá být univerzálním frameworkem pro knihy, povídky, obecné dokumenty, výzkumné výstupy nebo jiné nesofwarové artefakty. Některé principy mohou být přenositelné i mimo software, ale není to designový požadavek a nesmí kvůli tomu klesat přesnost softwarového workflow.
 
 Maximální automatizace není cíl sama o sobě. Standard má automatizovat rutinní handoff a provedení tam, kde tím neklesá kvalita, neztrácí se lidská autorita a nevzniká zbytečná procesní režie.
 
@@ -30,6 +28,8 @@ Typický vstup pro agenta je například:
 nebo:
 
 > Jsi Analyst. Zpracuj findings z Issue #12 a připrav návrh dalšího postupu.
+
+Pro roli, která zpracovává autorizovaný návrh nebo findings a připravuje přesný cílový obsah etalonu, používá `agenti-lab` **výhradně název `Editor` a zkratku `E`**.
 
 Agent má z repozitáře pochopit cíl projektu, své kompetence, stav přiděleného Issue a relevantní část aktuálního etalonu. Nemá potřebovat soukromý chatový kontext.
 
