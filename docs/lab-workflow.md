@@ -2,43 +2,52 @@
 
 Tento dokument definuje jednoduchý pracovní model pro vývoj produktu `bukovskyjosef/agenti`.
 
-Lab sám **nemusí být autonomní**. Human/Product Owner může být ruční koordinátor, který jednotlivým agentům zadává konkrétní roli a Issue.
+Lab sám **nemusí být autonomní**. Human/Product Owner může být ruční koordinátor; **K = Konzultant** mu může průběžně pomáhat držet kontext, formulovat rozhodnutí a řídit pracovní frontu.
 
-## 1. Issue je jednotka práce
+## 1. Kanonické role
+
+V `agenti-lab` platí:
+
+- **A = Analyst**
+- **E = Editor**
+- **R = Reviewer**
+- **K = Konzultant**
+- **P = Publisher**
+
+Zkratka je první písmeno jediného kanonického názvu role. Alternativní názvy rolí `Investigator`, `Implementer`, `Critic`, `Verifier` ani `Asistentka` se nepoužívají.
+
+## 2. Issue je jednotka práce
 
 Každá smysluplná otevřená práce nad etalonem má durable Issue v `agenti-lab`.
 
-Issue může představovat například:
-
-- audit nebo review,
-- investigation / analýzu,
-- zpracování findings,
-- rozhodovací bod,
-- experiment,
-- návrh změny etalonu,
-- implementaci schválené změny,
-- publication nebo post-publish verification.
+Issue může představovat například audit/review, analýzu, zpracování findings, rozhodovací bod, experiment, návrh změny, editaci/implementaci schválené změny, publication nebo post-publish review.
 
 Není potřeba složitý univerzální lifecycle. Stav musí být dostatečně jasný z Issue a souvisejících artefaktů, aby další agent poznal, co je hotové a co zbývá.
 
-## 2. Human dispatch
+## 3. K — Konzultant a Human dispatch
+
+K je Human-facing poradce a koordinátor. Pomáhá Humanovi:
+
+- orientovat se v otevřené práci,
+- určit, zda další krok patří A, E, R nebo P,
+- formulovat decision-ready otázku,
+- durable zapsat explicitní Human rozhodnutí,
+- založit nebo aktualizovat navazující Issue a dependency/status,
+- hlídat, aby se práce nezacyklila nebo nepřeskočila potřebné review.
+
+K nesmí nahrazovat specializované role. Pokud materiálně navrhl nebo editoval změnu, nesmí být jejím nezávislým R.
 
 Human může spustit agenta jednoduchou instrukcí typu:
 
-> Jsi Reviewer. Pracuj na Issue #N v `bukovskyjosef/agenti-lab`. Řiď se repozitářem.
+> Jsi R. Pracuj na Issue #N v `bukovskyjosef/agenti-lab`. Řiď se repozitářem.
 
-Agent si načte:
-
-1. účel labu z root README,
-2. přidělené Issue včetně komentářů a linked artefaktů,
-3. pravidla své role z `AGENTS.md`,
-4. pouze relevantní část aktuálního `agenti/main`.
+Agent si načte účel labu, přidělené Issue včetně komentářů a linked artefaktů, pravidla své role z `AGENTS.md` a pouze relevantní část aktuálního `agenti/main`.
 
 Agent **nepotřebuje automaticky pokračovat na další Issue** a nemá si bez pověření přibírat práci.
 
-## 3. Analysis / Investigation
+## 4. A — Analysis
 
-Analyst nebo Investigator:
+A:
 
 - ověří skutečný problém proti aktuálnímu etalonu,
 - shromáždí evidence,
@@ -47,69 +56,47 @@ Analyst nebo Investigator:
 - připraví materiální varianty pouze tam, kde je potřeba Human volba,
 - durable zapíše závěr do Issue.
 
-Možný výsledek je například:
+Možný výsledek je například: nic měnit není potřeba, potřebujeme další evidence, existuje konkrétní návrh změny, nebo potřebujeme Human decision.
 
-- nic měnit není potřeba,
-- potřebujeme další evidence,
-- existuje konkrétní návrh změny,
-- potřebujeme Human decision.
+## 5. E — Editace / implementace změny
 
-## 4. Reviewer
+Po schválení směru E připraví přesný reviewovatelný cílový obsah.
 
-Reviewer je jiná logická instance než autor kontrolovaného návrhu nebo změny.
+E:
 
-Review může kontrolovat:
+- zpracuje pouze autorizovaný návrh nebo findings,
+- neexpanduje scope mimo Issue,
+- pokud narazí na nový materiální směr, zastaví se a vrátí Human decision přes K/Humana místo vlastního rozhodnutí,
+- pro větší změnu může použít lab branch/PR,
+- pro malou změnu může přesný návrh existovat přímo v Issue, pokud je jednoznačně reviewovatelný,
+- nepublikuje změnu přímo do `agenti/main`.
 
-- auditní závěr,
-- návrh změny standardu,
-- zpracování předchozích findings,
-- konkrétní lab branch/PR,
-- publikovaný stav `agenti/main`.
+## 6. R — Review
 
-Reviewer:
+R je jiná logická instance než autor kontrolovaného návrhu nebo změny.
+
+R může kontrolovat auditní závěr, návrh změny standardu, zpracování předchozích findings, konkrétní lab branch/PR i publikovaný stav `agenti/main`.
+
+R:
 
 - pracuje z durable artefaktů, ne z ústního/chatového převyprávění,
 - findings zapisuje do Issue/PR/review,
 - neopravuje kontrolovanou práci jako její autor,
 - odlišuje skutečný defect od doporučení a od bodu vyžadujícího Human rozhodnutí.
 
-## 5. Zpracování findings
+Post-publish verification je rovněž práce R; nejde o samostatnou roli.
 
-Pokud review vrátí připomínky, Human může přidělit Issue jiné instanci jako Analyst nebo **Editor (E)**.
-
-Ta:
-
-- zpracuje pouze relevantní findings,
-- neexpanduje scope mimo Issue,
-- pokud finding vyžaduje nový materiální směr, připraví Human decision místo jeho automatického rozhodnutí,
-- zanechá nový durable výsledek pro další review.
-
-Cyklus se může opakovat, dokud není návrh dostatečně kvalitní.
-
-## 6. Human decision
+## 7. Human decision
 
 Materiální změnu směru produktu `agenti` schvaluje Human/Product Owner.
 
-Decision-ready agent má člověku předložit:
+Decision-ready A nebo K má člověku předložit stručný problém, evidence a jejich limity, relevantní varianty/trade-offy a případné doporučení oddělené od rozhodnutí.
 
-- stručný problém,
-- evidence a jejich limity,
-- relevantní varianty/trade-offy,
-- případné doporučení oddělené od rozhodnutí.
+Human decision se zapíše do příslušného lab Issue. `agenti-lab` nemá roli Asistentky.
 
-Human decision se zapíše do příslušného lab Issue. Samostatná role Asistentky je v labu volitelná; člověk může rozhodovací dialog vést přímo s Analystem nebo jiným pověřeným agentem.
+## 8. P — Publish do `agenti/main`
 
-## 7. Příprava změny etalonu
-
-Po schválení směru **Editor (E)** připraví přesný cílový obsah.
-
-Pro větší změnu je vhodná lab branch/PR. Pro malou změnu může přesný návrh existovat přímo v Issue, pokud je stejně jednoznačně reviewovatelný.
-
-Před publikací musí jiná instance Reviewer ověřit **přesný obsah, který má být publikován**, nikoli jen obecnou myšlenku.
-
-## 8. Publish do `agenti/main`
-
-Po explicitním Human schválení a požadovaném independent review smí Publisher:
+Po explicitním Human schválení a požadovaném independent review smí P:
 
 1. načíst přesný schválený target,
 2. zapsat jej do `agenti/main`,
@@ -119,16 +106,16 @@ Po explicitním Human schválení a požadovaném independent review smí Publis
 
 V `agenti` se kvůli publish nevytváří vlastní Issue nebo feature branch.
 
-## 9. Post-publish verification
+## 9. Post-publish review
 
-Po publish jiná logická instance ověří alespoň:
+Po publish jiná logická instance R ověří alespoň:
 
 - že `agenti/main` odpovídá schválenému targetu,
 - že dokumentace je interně konzistentní a cold-startable,
 - že neobsahuje pracovní lab artefakty,
 - že běžný konzument nemusí číst `agenti-lab`, aby pochopil aktuální standard.
 
-Pokud verification najde problém, zapíše jej do lab Issue a práce se vrátí do corrective loopu.
+Pokud R najde problém, zapíše jej do lab Issue a práce se vrátí do corrective loopu.
 
 ## 10. Durable handoff
 
@@ -140,6 +127,6 @@ Pokud verification najde problém, zapíše jej do lab Issue a práce se vrátí
 | Human decision | lab Issue |
 | přesný approved publication target | lab Issue / reviewed lab PR |
 | publikovaný výsledek | `agenti/main` |
-| target commit SHA + post-publish verification | lab Issue |
+| target commit SHA + post-publish review | lab Issue |
 
 Chat slouží člověku jako pohodlné rozhraní. Další agent ale musí být schopen pokračovat z repozitáře.
