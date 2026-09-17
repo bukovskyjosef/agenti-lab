@@ -1,5 +1,5 @@
 name: Investigation / audit
-description: Investigate evidence, a workflow problem, adoption experience or hypothesis without changing the target standard.
+description: Investigate evidence, a workflow problem, adoption experience or hypothesis without changing the published target.
 title: "[INVESTIGATION] "
 body:
   - type: textarea
@@ -14,7 +14,7 @@ body:
     id: why
     attributes:
       label: Why it matters
-      description: What target workflow quality, cost, reliability or adoption concern motivates this investigation?
+      description: What workflow quality, cost, reliability or adoption concern motivates this investigation?
     validations:
       required: true
 
@@ -22,9 +22,9 @@ body:
     id: evidence
     attributes:
       label: Evidence sources
-      description: Link exact agenti refs, real-project issues/PRs, experiments or other durable evidence. Do not copy the full target standard.
+      description: Link exact agenti/main refs, real-project issues/PRs, experiments or other durable evidence. Do not copy the full target standard.
       placeholder: |
-        - bukovskyjosef/agenti: ...
+        - bukovskyjosef/agenti@main: ...
         - FamilyHelper/Kvazi/...: ...
     validations:
       required: true
@@ -40,9 +40,11 @@ body:
     attributes:
       label: Responsible lab mode
       options:
-        - Investigator
+        - Investigator / Analyst
         - Reviewer / Critic
         - Asistentka
+        - Developer / Editor
+        - Publisher
     validations:
       required: true
 
@@ -59,7 +61,7 @@ body:
     attributes:
       label: Repository boundary check
       options:
-        - label: This issue does not itself change the current target standard in bukovskyjosef/agenti.
+        - label: This issue does not itself change the current published target in bukovskyjosef/agenti.
           required: true
-        - label: If a target change is recommended, it will use the promotion workflow rather than being treated as already authorized.
+        - label: If a target change is recommended, Human decision and any implementation/review will stay in agenti-lab until a clean target is published to agenti/main.
           required: true
