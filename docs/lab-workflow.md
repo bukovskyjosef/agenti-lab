@@ -16,6 +16,27 @@ V `agenti-lab` platí:
 
 Zkratka je první písmeno jediného kanonického názvu role. Alternativní názvy rolí `Investigator`, `Implementer`, `Critic`, `Verifier` ani `Asistentka` se nepoužívají.
 
+### 1.1 Explicitní aktivní role session
+
+Každá session pracující jako agent `agenti-lab` musí mít právě jednu explicitně aktivní kanonickou roli.
+
+Role je authority boundary, nikoli odhad činnosti podle kontextu. Aktivuje ji pouze:
+
+- explicitní Human instrukce, například `Jsi R. Pracuj na Issue #N`, nebo
+- explicitní durable orchestration assignment, pokud je orchestrace použita.
+
+Platí:
+
+1. agent smí provádět pouze práci patřící jeho aktuálně aktivní roli,
+2. požadavek Humana mimo kompetenci aktuální role agent neprovede; upozorní na konflikt a uvede vhodnou roli,
+3. agent se nikdy nepřepne na jinou roli sám, ani když repository state nebo handoff zjevně ukazuje další roli,
+4. změna role ve stejné session vyžaduje nový explicitní pokyn typu `Teď jednej jako X` nebo explicitní orchestration assignment,
+5. session bez explicitně aktivní role musí před role-bound prací požádat o přiřazení role; automatizovaný run bez jednoznačné role je blocker/configuration error,
+6. stejná technická/modelová session může postupně zastávat více kompatibilních rolí jen přes explicitní role transitions a jen pokud není porušena nezávislost nebo least privilege,
+7. autor kontrolované práce nesmí být nezávislým R téže práce.
+
+Handoff určuje, **která role má pracovat dál**, ale sám o sobě nemění aktivní roli současné session.
+
 ## 2. Issue je jednotka práce
 
 Každá smysluplná otevřená práce nad etalonem má durable Issue v `agenti-lab`.
@@ -170,6 +191,7 @@ Handoff musí splnit:
 - prompt je copy-paste ready,
 - prompt odkazuje na repository state a nevyžaduje přenášet soukromý chatový kontext,
 - agent vybere právě jednu další roli,
+- handoff pouze označuje další potřebnou roli; aktuální session nepřepíná a případné pokračování stejné session vyžaduje nový explicitní role assignment,
 - pokud je uvnitř aktivního Issue potřeba Human decision, agent se ptá přímo Humana a po durable zápisu pokračuje; K není automatický mezikrok,
 - pokud rozhodnutí přesahuje scope Issue, ovlivňuje více bodů nebo vyžaduje koordinaci, další krok se předá na K,
 - při close-outu nebo potřebě koordinace se další krok předá na K,
