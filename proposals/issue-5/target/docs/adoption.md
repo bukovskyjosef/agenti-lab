@@ -54,6 +54,8 @@ Cross-repository work-item ↔ change binding rule:
 Composite candidate / release identity rule:
 ```
 
+`Authoritative work-item location` a `Human / product-decision location` musí být uvnitř control/governance repository; implementation repository může držet pouze repository-local technické evidence a odkazy zpět.
+
 Multi-repo binding musí zajistit, že:
 
 - každý implementation PR/change proposal odkazuje na jeden autoritativní work item v control repository,
