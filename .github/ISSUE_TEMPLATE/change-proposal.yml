@@ -1,5 +1,5 @@
 name: Target change proposal
-description: Prepare a decision-ready proposal for a possible change to the target standard in bukovskyjosef/agenti.
+description: Prepare a decision-ready proposal for changing the published standard in bukovskyjosef/agenti.
 title: "[PROPOSAL] "
 body:
   - type: dropdown
@@ -10,7 +10,7 @@ body:
         - DRAFT
         - READY_FOR_CRITIQUE
         - AWAITING_HUMAN
-        - PROMOTE
+        - APPROVED_FOR_PUBLICATION
         - ITERATE
         - REJECT
     validations:
@@ -20,7 +20,7 @@ body:
     id: problem
     attributes:
       label: Problem in the current target model
-      description: Describe the problem and point to the exact current agenti rule/ref being evaluated.
+      description: Describe the problem and point to the exact current agenti/main rule/ref being evaluated.
     validations:
       required: true
 
@@ -28,7 +28,7 @@ body:
     id: evidence
     attributes:
       label: Evidence
-      description: Summarize durable evidence and link the underlying investigations, real-project observations or experiments.
+      description: Summarize durable evidence and link investigations, real-project observations or experiments.
     validations:
       required: true
 
@@ -49,8 +49,8 @@ body:
   - type: textarea
     id: target_impact
     attributes:
-      label: Expected target impact
-      description: Which rule families/files/automation contracts in agenti would likely change if promoted? This is impact analysis, not implementation authorization.
+      label: Expected published-target impact
+      description: Which rule families/files in agenti/main would change if approved? This is impact analysis, not publication authority.
     validations:
       required: true
 
@@ -58,26 +58,26 @@ body:
     id: critique
     attributes:
       label: Independent critique / review
-      description: Link or summarize independent critique for significant proposals. The proposal author must not present self-review as independent review.
+      description: Link or summarize independent critique. Proposal author must not present self-review as independent review.
 
   - type: textarea
     id: human
     attributes:
       label: Human decision
-      description: Record explicit REJECT / ITERATE / PROMOTE and any exact choice/conditions. Leave unresolved until the Human/Product Owner decides.
+      description: Record explicit REJECT / ITERATE / APPROVE_FOR_PUBLICATION and exact conditions. Leave unresolved until Human/Product Owner decides.
 
   - type: textarea
-    id: target_handoff
+    id: publication
     attributes:
-      label: Target handoff
-      description: After PROMOTE, link the new issue/decision in bukovskyjosef/agenti. The target artifact becomes authoritative for implementation.
+      label: Publication handoff
+      description: After approval, record final reviewed lab artifact/branch and, after publish, the resulting agenti/main commit SHA.
 
   - type: checkboxes
     id: boundary
     attributes:
       label: Authority boundary
       options:
-        - label: This proposal is not the current target specification.
+        - label: This proposal is not the current published target specification.
           required: true
-        - label: PROMOTE requires a separate linked target artifact in bukovskyjosef/agenti before implementation is authorized.
+        - label: Approval authorizes preparation/publication of the reviewed target; it does not create a development Issue or PR in bukovskyjosef/agenti.
           required: true
