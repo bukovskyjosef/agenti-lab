@@ -1,23 +1,28 @@
 # Agenti Lab documentation map
 
-Lab záměrně používá malou sadu kanonických pravidel. Nemá kopírovat plný model z `bukovskyjosef/agenti`.
+`agenti-lab` vlastní vývoj standardu; `bukovskyjosef/agenti` vlastní pouze jeho publikovaný aktuální výsledek.
 
-## Kanoničtí vlastníci
+## Kanoničtí vlastníci lab pravidel
 
 | Otázka | Kanonický vlastník |
 |---|---|
-| Co patří do `agenti` vs `agenti-lab`, kde je autorita a jak probíhá promotion | [`repository-boundary.md`](repository-boundary.md) |
-| Jak probíhá investigation, critique, human decision a promotion | [`lab-workflow.md`](lab-workflow.md) |
+| Co patří do `agenti` vs `agenti-lab`, kde je autorita a co znamená publication | [`repository-boundary.md`](repository-boundary.md) |
+| Jak probíhá investigation, design/experiment, critique, Human decision a publication | [`lab-workflow.md`](lab-workflow.md) |
 
-`README.md` a `AGENTS.md` jsou entrypointy a smí tato pravidla pouze stručně shrnout.
+Kořenové `README.md` a `AGENTS.md` jsou entrypointy; detailní pravidla pouze směrují na vlastníky výše.
 
 ## Externí cílová autorita
 
-Aktuální cílový agentní standard není duplikován v tomto repozitáři. Jeho autoritativní zdroje jsou v `bukovskyjosef/agenti`, standardně na `main`. Lab issue musí při hodnocení cílového pravidla odkázat na konkrétní soubor/issue/PR/ref, který skutečně zkoumá.
+Aktuální standard se v labu neduplikuje. Čte se z `bukovskyjosef/agenti@main`.
+
+Při investigation uváděj konkrétní cílové dokumenty/ref, které hodnotíš. Lab návrh nebo decision history nenahrazuje aktuální target.
 
 ## Pracovní artefakty
 
-- Evidence, audity, experimenty a návrhy: GitHub Issues / PRs v `agenti-lab`.
-- Lidská volba o tom, zda se návrh má posunout dál: durable v příslušném lab Issue.
-- Autorizovaný kontrakt změny cílového standardu: GitHub Issue/decision/PR v `agenti`.
-- Aktuální výsledné pravidlo po implementaci: kanonický dokument v `agenti`.
+- Issues, decisions, audits, evidence a otevřené body standardu: **`agenti-lab`**.
+- Experimenty a návrhy: **lab branches / PRs**.
+- Human rozhodnutí o standardu: **příslušný lab Issue**.
+- Publish handoff a výsledný target SHA: **lab Issue**.
+- Aktuální výsledný standard: **`agenti/main`**.
+
+V `agenti` se kvůli změně standardu nezakládá paralelní implementační Issue/PR workflow.
