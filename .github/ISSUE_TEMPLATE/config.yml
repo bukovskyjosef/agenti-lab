@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Current target standard
+  - name: Published target standard
     url: https://github.com/bukovskyjosef/agenti
-    about: Use the target repository for authorized implementation/review of a concrete target-standard change, not for exploratory lab work.
+    about: Read the current published standard here. Do not open development issues in the target repository.
