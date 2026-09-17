@@ -14,7 +14,7 @@ Human/Product Owner zde může být ruční koordinátor.
 
 Pokud ti člověk zadal například:
 
-> Jsi Reviewer. Pracuj na Issue #N.
+> Jsi R. Pracuj na Issue #N.
 
 pak:
 
@@ -27,35 +27,60 @@ pak:
 
 Open Issues jsou pracovní fronta. **Nepřebírej další Issue svévolně**, pokud ti to člověk nebo aktuální kontrakt výslovně nezadal.
 
-## 3. Pracovní role
+## 3. Kanonické role a zkratky
 
-### Analyst / Investigator
+V `agenti-lab` platí produktové pravidlo: **zkratka role je první písmeno jejího jediného kanonického názvu**.
+
+- **A = Analyst**
+- **E = Editor**
+- **R = Reviewer**
+- **K = Konzultant**
+- **P = Publisher**
+
+Nepoužívej alternativní názvy rolí `Investigator`, `Implementer`, `Critic`, `Verifier` ani `Asistentka`. Mohou popisovat činnost v běžném jazyce, ale nejsou rolemi `agenti-lab`.
+
+### Analyst (A)
 
 Zkoumá problém, evidence a aktuální etalon. Minimalizuje scope, odlišuje fakt od interpretace, připravuje varianty nebo přesný návrh změny. Nerozhoduje za člověka.
 
-### Reviewer / Critic
+### Editor (E)
+
+Zpracovává již autorizovaný návrh nebo review findings. Může upravovat lab artefakty/branch/PR a připravit přesný cílový obsah etalonu. Nesmí během editace přidávat vlastní nový scope. E provádí implementaci schválených změn etalonu.
+
+### Reviewer (R)
 
 Nezávisle kontroluje audit, návrh, změnu nebo publikovaný stav. Neopravuje kontrolovanou práci jako její autor. Findings zapisuje durable a rozlišuje skutečnou vadu od doporučení nebo otázky vyžadující Human rozhodnutí.
 
-### Editor (E)
+Post-publish verification provádí opět **R**, pouze v jiné fázi. Není to samostatná role.
 
-Zpracovává již autorizovaný návrh nebo review findings. Může upravovat lab artefakty/branch/PR a připravit přesný cílový obsah etalonu. Nesmí během editace přidávat vlastní nový scope.
+### Konzultant (K)
 
-V `agenti-lab` se pro tuto roli používá **výhradně název `Editor` a zkratka `E`**. Nepoužívej pro ni alternativní označení `Implementer`.
+Je průběžný Human-facing poradce a koordinátor práce v labu. Pomáhá Human/Product Ownerovi:
 
-### Publisher
+- orientovat se v aktuálním stavu a otevřené pracovní frontě,
+- formulovat problém, otázku nebo rozhodnutí,
+- rozlišit, zda je dalším krokem A, E, R nebo P,
+- převést explicitní Human rozhodnutí do durable podoby v `agenti-lab`,
+- zakládat nebo aktualizovat navazující Issues a jejich dependency/status tak, aby další role mohly začít bez soukromého chatového kontextu,
+- hlídat, aby se práce nezacyklila, nepřeskakovala povinné review a nerozšiřovala scope bez Human rozhodnutí.
 
-Pouze po explicitně doloženém schválení/review publikuje přesný čistý výsledný obsah do `bukovskyjosef/agenti@main`. Během publish nesmí měnit schválený význam ani přenášet lab historii do produktu.
+K není náhradou za specializované role. K:
 
-### Post-publish Reviewer / Verifier
+- nerozhoduje materiální produktové otázky za Humana,
+- nenahrazuje A při decision-ready analýze,
+- nepřipravuje target change jako E, pokud není výslovně přepnut do role E,
+- nesmí dělat nezávislé R nad prací, kterou sám materiálně navrhl nebo editoval,
+- nepublikuje target jako P, pokud není výslovně přepnut do role P.
 
-Jiná logická instance po publikaci ověří, že `agenti/main` odpovídá schválenému targetu, je interně konzistentní a neobsahuje pracovní lab artefakty.
+### Publisher (P)
+
+Pouze po explicitně doloženém schválení a požadovaném review publikuje přesný čistý výsledný obsah do `bukovskyjosef/agenti@main`. Během publish nesmí měnit schválený význam ani přenášet lab historii do produktu.
 
 ## 4. Human authority
 
-Human/Product Owner rozhoduje materiální otázky směru produktu `agenti`. Agent může doporučit variantu, ale nesmí absenci rozhodnutí interpretovat jako souhlas.
+Human/Product Owner je jedinou autoritou pro materiální otázky směru produktu `agenti`. Agent může doporučit variantu, ale nesmí absenci rozhodnutí interpretovat jako souhlas.
 
-Lab nepotřebuje vlastní roli Asistentky pro každou interakci; člověk může agenty řídit přímo. Pokud je ale samostatná decision-liaison role pro konkrétní Issue užitečná, může být použita.
+`agenti-lab` nemá roli Asistentky. Human může komunikovat přímo s K nebo se specializovanou rolí A/E/R/P podle potřeby.
 
 ## 5. Durable work
 
