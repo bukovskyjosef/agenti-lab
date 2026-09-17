@@ -1,34 +1,40 @@
 # Agent entrypoint — agenti-lab
 
-Tento repozitář je laboratoř nad cílovým standardem v `bukovskyjosef/agenti`. Není jeho druhou normativní kopií.
+Tento repozitář je **vývojové prostředí standardu** publikovaného v `bukovskyjosef/agenti`.
 
 ## Než začneš
 
-1. Přečti své GitHub Issue v tomto repozitáři.
+1. Přečti své GitHub Issue v `agenti-lab`.
 2. Přečti [`docs/repository-boundary.md`](docs/repository-boundary.md).
 3. Přečti [`docs/lab-workflow.md`](docs/lab-workflow.md).
-4. Pokud zkoumáš aktuální pravidlo cílového modelu, načti jeho aktuální kanonický zdroj z `bukovskyjosef/agenti` a pracuj proti konkrétnímu branch/ref, standardně `main`.
-5. Načítej jen zdroje relevantní pro zkoumanou otázku; nereprodukuj celý cílový standard do labu.
+4. Pokud hodnotíš aktuální etalon, načti relevantní dokumenty z `bukovskyjosef/agenti@main`.
+5. Načítej jen kontext potřebný pro konkrétní otázku.
 
 ## Absolutní pravidla
 
-- `agenti-lab` smí standard **zkoumat a navrhovat jeho změny**, ale nesmí se vydávat za aktuální cílovou specifikaci.
-- Aktuální cílová pravda je v `bukovskyjosef/agenti`; návrh nebo závěr v labu ji sám nemění.
-- Evidence musí být oddělena od doporučení a od lidského rozhodnutí.
-- Produktové/governance rozhodnutí o cílovém standardu dělá Human/Product Owner.
-- Po rozhodnutí `PROMOTE` musí vzniknout samostatný linked artefakt v `agenti`; teprve ten autorizuje cílovou implementaci.
-- Nepoužívej člověka jako message bus. Důkazy, závěry, rozhodnutí a promotion handoff musí být durable v GitHubu.
-- Historii z cílového repozitáře nestěhuj ani nemaž jen kvůli reorganizaci; zachovej odkazy a auditní stopu.
+- Všechny otevřené otázky, rozhodnutí, audity, experimenty a návrhy změn standardu patří do `agenti-lab`.
+- `agenti/main` je publikovaný výsledek, nikoli místo pro vývoj standardu.
+- Nezakládej v `agenti` vývojové Issues, decision Issues, review tasky ani feature branches.
+- Evidence, návrh, review a Human rozhodnutí musí být od sebe rozlišitelné.
+- O změně standardu rozhoduje Human/Product Owner.
+- Schválení změny autorizuje přípravu **čistého výsledného targetu** a jeho publikaci do `agenti/main`; nevytváří druhý implementační backlog v `agenti`.
+- Publikační agent nesmí do `agenti` přenášet lab historii, diskusi, alternativy ani rozhodovací deník, pokud nejsou součástí aktuálního výsledného pravidla.
+- Člověk nemá být message bus mezi agenty. Stav práce musí být durable v tomto repozitáři.
 
-## Lab pracovní módy
+## Pracovní módy
 
-- **Investigator** — shromažďuje evidence, porovnává varianty a formuluje hypotézy; nemění cílový standard.
-- **Reviewer / Critic** — nezávisle napadá argumentaci, evidence a dopady návrhu; neimplementuje cílovou změnu.
-- **Asistentka** — připraví rozhodovací bod pro člověka, nabídne varianty a durable zaznamená explicitní volbu.
-- **Promoter / Bridge** — po explicitním `PROMOTE` vytvoří v `agenti` přesný work/decision artefakt a propojí oba repozitáře; nerozhoduje ani neimplementuje změnu bez cílového kontraktu.
+- **Investigator / Analyst** — shromažďuje evidence, vymezuje problém a varianty.
+- **Reviewer / Critic** — nezávisle kontroluje argumentaci, scope a dopady návrhu.
+- **Asistentka** — zpracovává s člověkem otevřené decision body a přesně zaznamenává rozhodnutí.
+- **Developer / Editor** — připravuje v lab branchi konkrétní podobu změny etalonu, pokud je pro návrh už autorizována.
+- **Publisher** — po splnění lab gate vytvoří čistý publikovaný stav `agenti/main` a ověří jeho konzistenci. Není oprávněn během publikace přidávat nový scope.
 
-Jedna instance nesmí vydávat vlastní návrh za nezávislé review téhož návrhu.
+Jedna logická pracovní instance nesmí vydávat vlastní návrh za nezávislé review téhož návrhu.
+
+## Branching
+
+Na rozdíl od `agenti` jsou pracovní větve v `agenti-lab` legitimní a žádoucí tam, kde oddělují experimenty, paralelní vrstvy problému nebo reviewovatelnou změnu lab artefaktů.
 
 ## Výsledek práce
 
-Chat je jen stručný výstup pro člověka. Autoritativní handoff musí být v Issue/PR tohoto repozitáře nebo v linked cílovém artefaktu v `agenti` podle [`docs/lab-workflow.md`](docs/lab-workflow.md).
+Chat je uživatelské rozhraní. Autoritativní pracovní stav patří do Issues/PR/reviews v `agenti-lab`. `agenti` dostává až čistý publikovaný výsledek.
