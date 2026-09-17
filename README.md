@@ -17,40 +17,48 @@ Maximální automatizace není cíl sama o sobě. Standard má automatizovat rut
 
 `agenti` nemá být backlogem vlastního vývoje. Vývojová historie a diskuse zůstávají zde.
 
+## Kanonické role v labu
+
+Zkratka role je vždy první písmeno jejího jediného kanonického názvu:
+
+- **A = Analyst** — analýza, evidence, varianty a decision-ready podklady.
+- **E = Editor** — implementuje již autorizovanou změnu etalonu a připravuje exact target change.
+- **R = Reviewer** — nezávisle kontroluje návrh, změnu nebo publikovaný stav; stejná role dělá i post-publish review.
+- **K = Konzultant** — průběžný poradce a koordinátor pro Humana; drží kontext, pomáhá formulovat rozhodnutí a řídí pracovní frontu, ale nenahrazuje specializované A/E/R/P.
+- **P = Publisher** — po schválení publikuje přesně reviewovaný target do `agenti/main`.
+
+`agenti-lab` nemá roli Asistentky. Alternativní názvy `Investigator`, `Implementer`, `Critic` a `Verifier` nejsou kanonické role.
+
 ## Jak se zde pracuje
 
-Lab **nemusí napodobovat autonomní delivery model, který sám navrhuje**. Human/Product Owner může být zcela legitimně ruční koordinátor práce.
+Lab **nemusí napodobovat autonomní delivery model, který sám navrhuje**. Human/Product Owner může být ruční koordinátor práce; K mu může průběžně pomáhat s orientací a dispatchingem.
 
 Typický vstup pro agenta je například:
 
-> Jsi Reviewer. Pracuj na Issue #12 v `bukovskyjosef/agenti-lab`. Řiď se repozitářem.
+> Jsi R. Pracuj na Issue #12 v `bukovskyjosef/agenti-lab`. Řiď se repozitářem.
 
 nebo:
 
-> Jsi Analyst. Zpracuj findings z Issue #12 a připrav návrh dalšího postupu.
-
-Pro roli, která zpracovává autorizovaný návrh nebo findings a připravuje přesný cílový obsah etalonu, používá `agenti-lab` **výhradně název `Editor` a zkratku `E`**.
+> Jsi A. Zpracuj findings z Issue #12 a připrav decision-ready návrh dalšího postupu.
 
 Agent má z repozitáře pochopit cíl projektu, své kompetence, stav přiděleného Issue a relevantní část aktuálního etalonu. Nemá potřebovat soukromý chatový kontext.
 
 ## Jednoduchý pracovní model
 
 ```text
-Human vybere práci / roli
+Human + K drží směr a pracovní frontu
         ↓
 open Issue v agenti-lab
         ↓
-Analyst / Investigator / Editor
+A podle potřeby připraví analýzu / Human decision
         ↓
-independent Reviewer
+E připraví exact target change
         ↓
-Human decision, pokud je potřeba
+R provede independent review
         ↓
-approved exact target change
+P publikuje schválený target do agenti/main
         ↓
-Publisher zapíše čistý výsledek do agenti/main
-        ↓
-independent post-publish verification
+R provede post-publish review
 ```
 
 Ne každé Issue musí projít všechny kroky. Audit může skončit review reportem; jednoduchá analýza může skončit doporučením; změna publikovaného standardu vždy vyžaduje oddělení autora změny a nezávislé kontroly.
@@ -59,17 +67,17 @@ Ne každé Issue musí projít všechny kroky. Audit může skončit review repo
 
 **Open Issues v tomto repozitáři jsou pracovní fronta.** Nevytváří se vedle nich další ruční backlog.
 
-Human může agentovi přímo určit, které Issue má řešit. Agent si nemá svévolně přibírat další otevřenou práci jen proto, že ji vidí.
+Human může agentovi přímo určit, které Issue má řešit. K může Humanovi doporučit další roli/Issue a podle explicitních Human rozhodnutí udržovat durable návaznosti. Agent si nemá svévolně přibírat další otevřenou práci jen proto, že ji vidí.
 
 ## Změna produktu `agenti`
 
 Pokud z práce v labu vznikne schválená změna etalonu:
 
-1. přesný zamýšlený target se připraví a zdokumentuje v labu,
-2. jiná logická instance jej nezávisle zkontroluje,
+1. E připraví přesný zamýšlený target v labu,
+2. R jej jako jiná logická instance nezávisle zkontroluje,
 3. potřebná Human rozhodnutí musí být explicitní v lab Issue,
-4. Publisher zapíše **jen schválený čistý výsledek** do `agenti/main`, bez lab historie,
-5. jiná instance ověří publikovaný stav proti schválenému návrhu.
+4. P zapíše **jen schválený čistý výsledek** do `agenti/main`, bez lab historie,
+5. R jako jiná logická instance ověří publikovaný stav proti schválenému návrhu.
 
 V `agenti` kvůli tomu nevzniká vlastní Issue/feature-branch workflow.
 
