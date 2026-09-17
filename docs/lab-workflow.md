@@ -75,7 +75,7 @@ Reviewer:
 
 ## 5. Zpracování findings
 
-Pokud review vrátí připomínky, Human může přidělit Issue jiné instanci jako Analyst/Editor/Implementer.
+Pokud review vrátí připomínky, Human může přidělit Issue jiné instanci jako Analyst nebo **Editor (E)**.
 
 Ta:
 
@@ -101,7 +101,7 @@ Human decision se zapíše do příslušného lab Issue. Samostatná role Asiste
 
 ## 7. Příprava změny etalonu
 
-Po schválení směru Editor/Implementer připraví přesný cílový obsah.
+Po schválení směru **Editor (E)** připraví přesný cílový obsah.
 
 Pro větší změnu je vhodná lab branch/PR. Pro malou změnu může přesný návrh existovat přímo v Issue, pokud je stejně jednoznačně reviewovatelný.
 
