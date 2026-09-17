@@ -1,55 +1,54 @@
 # Agenti Lab
 
-`agenti-lab` je výzkumná a meta-vývojová vrstva pro referenční agentní workflow udržovaný v [`bukovskyjosef/agenti`](https://github.com/bukovskyjosef/agenti).
+`agenti-lab` je **jediné pracovní místo pro vývoj referenčního agentního standardu** publikovaného v [`bukovskyjosef/agenti`](https://github.com/bukovskyjosef/agenti).
 
 ## Rozdělení odpovědností
 
-- **`agenti`** odpovídá na otázku: **Jak má cílový agentní workflow aktuálně fungovat?** Jeho `main` je autoritativní cílový standard.
-- **`agenti-lab`** odpovídá na otázku: **Je tento standard dobrý a jak by se měl změnit?** Obsahuje audity, experimenty, zkušenosti z reálných projektů, alternativy a návrhy změn.
+- **`agenti` = produkt / publikovaný etalon.** Obsahuje pouze aktuální čistý výsledek, který má agent použít při bootstrapu jiného repozitáře. `main` je publikovaný standard; repo nemá sloužit jako pracovní backlog standardu.
+- **`agenti-lab` = vývoj etalonu.** Patří sem Issues, rozhodnutí Human/Product Ownera, audity, experimenty, alternativy, větve, PR, review a všechny otevřené otázky o tom, zda nebo jak se má standard změnit.
 
-Lab nikdy není druhým zdrojem aktuálního cílového pravidla. Návrh v tomto repozitáři nemění `agenti` bez samostatného durable work/decision artefaktu v cílovém repozitáři.
+Žádný lab artefakt není sám o sobě aktuálním cílovým pravidlem. Po schválení změny se z labu **publikuje čistý výsledný stav do `agenti/main`**. V `agenti` se kvůli tomu nezakládá druhý vývojový Issue/PR workflow.
 
 ## Základní smyčka
 
 ```text
-reálné projekty / zkušenost / problém
-                ↓
-            agenti-lab
-     evidence → audit → návrh
-                ↓
-        Human/Product Owner
-                ↓
-        promote / reject / iterate
-                ↓
-       issue / decision v agenti
-                ↓
-       implementace + review
-                ↓
-          agenti/main
+reálný projekt / problém / nápad
+              ↓
+          agenti-lab
+ investigation → critique → varianty
+              ↓
+      Human/Product Owner
+        ↙        ↓        ↘
+     reject    iterate    approve
+                          ↓
+                 připrav čistý target
+                          ↓
+                 publish do agenti/main
+                          ↓
+                post-publish audit
 ```
-
-Po promování je cílový issue/PR v `agenti` autoritativní pro implementaci změny. Lab issue zůstává pouze zdrojem evidence, experimentální historie a důvodu návrhu.
 
 ## Co patří sem
 
-- audity a kritika modelu `agenti`,
-- zkušenosti z FamilyHelperu, Kvazi a dalších adopcí,
-- porovnání alternativních workflow,
-- experimenty s orchestration/automation/handoff modely,
-- návrhy změn cílového standardu,
-- otázky typu „funguje toto pravidlo dobře?“.
+- změny a redesign standardu `agenti`,
+- rozhodnutí o standardu,
+- zkušenosti z Kvazi, FamilyHelperu a dalších adopcí,
+- audity a failure analysis,
+- experimenty s rolemi, workflow, orchestration, automation a release modely,
+- pracovní větve a PR pro paralelní vrstvy problému,
+- nezávislé review návrhů před publikací,
+- migrační a publikační evidence.
 
 ## Co sem nepatří
 
-- aktuální normativní definice cílového workflow,
-- implementační kontrakt schválené změny `agenti`,
-- review konkrétního PR v `agenti`,
-- produktová práce reálného aplikačního repozitáře.
+- produktová práce reálného aplikačního repozitáře,
+- kopie aktuálního cílového standardu,
+- dlouhodobá normativní pravda, která už byla publikována do `agenti/main`.
 
 ## Pro agenty
 
-Začni v [`AGENTS.md`](AGENTS.md). Kanonickou hranici mezi oběma repozitáři definuje [`docs/repository-boundary.md`](docs/repository-boundary.md); průběh lab práce definuje [`docs/lab-workflow.md`](docs/lab-workflow.md).
+Začni v [`AGENTS.md`](AGENTS.md). Hranici mezi repozitáři vlastní [`docs/repository-boundary.md`](docs/repository-boundary.md); pracovní tok laboratoře vlastní [`docs/lab-workflow.md`](docs/lab-workflow.md).
 
-## Bootstrap
+## Praktické pravidlo
 
-Repozitář byl založen jako prázdný. Issue #1 explicitně povoluje jednorázový přímý bootstrap `main`; po vytvoření této kostry mají další změny používat issue/branch/PR přiměřeně povaze změny.
+Když řešíš otázku **„jak by se měl etalon změnit?“**, pracuj zde. Když chceš zjistit **„jak etalon aktuálně zní?“**, čti `agenti/main`.
