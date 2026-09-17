@@ -139,12 +139,15 @@ Projekt nemusí používat cryptographic hash; může použít durable version t
 
 ### Eligibility rule
 
-Nový role run se smí spustit pouze pokud:
+Po splnění current lifecycle/dependency/gate/terminal/active-role guardů je nový role run eligible právě tehdy, když platí alespoň jedna z těchto podmínek:
 
-1. proti poslednímu **applicable completed runu stejné authority/purpose** došlo k material change relevantního fingerprintu, **nebo**
-2. existuje durable objektivně validní progress reason podle `delivery-cycle.md`, který opakování opravňuje i bez změny contract/candidate (např. Project Profile-authorized retry transient external operation s novým execution contextem).
+1. **First run:** pro stejnou authority/purpose ještě neexistuje žádný applicable completed run; aktuální již autorizovaný run se proto nesmí potlačit jen kvůli absenci předchozího fingerprintu,
+2. **Changed state:** applicable completed run existuje a od něj došlo k material change relevantního fingerprintu, **nebo**
+3. **Objective retry/progress:** existuje durable objektivně validní progress reason podle `delivery-cycle.md`, který opakování opravňuje i bez změny contract/candidate (např. Project Profile-authorized retry transient external operation s novým execution contextem).
 
-Pokud ani jedno neplatí, orchestrace run potlačí **před** provider/model invocation. Duplicate/replayed event může skončit levnou state/fingerprint evaluací bez token/context churn.
+First-run eligibility není bypass ostatních guardů: terminal `Stopped`, chybějící/ambiguous active role, nesplněný lifecycle/dependency/gate nebo jiný blocking stav run stále zakazují.
+
+Pokud applicable completed run existuje a neplatí ani changed-state ani objective retry/progress podmínka, orchestrace run potlačí **před** provider/model invocation. Duplicate/replayed event může skončit levnou state/fingerprint evaluací bez token/context churn.
 
 Run fingerprint guard nesmí potlačit běh jen proto, že se změna odehrála mimo zvolený fingerprint; proto fingerprint musí zahrnovat všechny a pouze normativně relevantní inputs dané role/purpose.
 
