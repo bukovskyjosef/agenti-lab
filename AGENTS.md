@@ -23,7 +23,8 @@ pak:
 3. načti jen relevantní lab pravidla a relevantní aktuální dokumenty z `bukovskyjosef/agenti@main`,
 4. proveď pouze práci autorizovanou tímto Issue a rolí,
 5. výsledek durable zapiš do Issue/PR/review,
-6. v chatu člověku dej jen stručný výsledek a případný doporučený další krok.
+6. v chatu člověku dej stručný výsledek,
+7. pokud nejsi K, **povinně ukonči odpověď explicitním handoffem pro další roli podle §4**.
 
 Open Issues jsou pracovní fronta. **Nepřebírej další Issue svévolně**, pokud ti to člověk nebo aktuální kontrakt výslovně nezadal.
 
@@ -76,13 +77,38 @@ K není náhradou za specializované role. K:
 
 Pouze po explicitně doloženém schválení a požadovaném review publikuje přesný čistý výsledný obsah do `bukovskyjosef/agenti@main`. Během publish nesmí měnit schválený význam ani přenášet lab historii do produktu.
 
-## 4. Human authority
+## 4. Povinný handoff pro Humana
+
+Každý agent v roli **A, E, R nebo P** musí po dokončení svého pověřeného úkolu určit z durable stavu repozitáře **jediný logický další krok** a dát Humanovi přesný copy-paste prompt pro příští kanonickou roli.
+
+Agent nesmí skončit pouze větou typu „další krok je review“ nebo nechat na Humanovi, aby znovu rekonstruoval, koho a jak má spustit.
+
+Závěr chatové odpovědi musí mít tento tvar:
+
+> **Dle pravidel je teď potřeba zadat R (Reviewerovi) úkol:**
+>
+> `Jsi R. Pracuj na Issue #N v repozitáři bukovskyjosef/agenti-lab. Řiď se repozitářem. <stručné upřesnění pouze pokud je skutečně nutné>`
+
+Písmeno i název role se samozřejmě nahradí skutečnou další rolí `A`, `E`, `R`, `K` nebo `P`.
+
+Pravidla handoffu:
+
+- prompt má být krátký a má odkazovat na durable repository state; nesmí do něj být nutné kopírovat soukromý chatový kontext,
+- agent musí vybrat **právě jednu** další roli podle aktuálních dependencies a workflow,
+- pokud je další krok Human decision, neimprovizuj rozhodnutí: předej další krok na **K**, který rozhodnutí s Humanem zpracuje,
+- pokud specializovaná práce skončila a je potřeba pouze koordinace, close-out nebo určení dalšího kroku, předej na **K**,
+- pokud je další role blokovaná, prompt musí mířit na roli, která má skutečný blocker odstranit, nikoli na blokovanou roli,
+- nevytvářej kvůli handoffu nový Issue nebo PR, pokud další krok patří do již existujícího pracovního artefaktu.
+
+**K je z této povinnosti vyňat**, protože jeho průběžnou funkcí je právě orientace Humana a řízení dalších handoffů. K však může a zpravidla má Humanovi přesný prompt pro další roli rovnou nabídnout.
+
+## 5. Human authority
 
 Human/Product Owner je jedinou autoritou pro materiální otázky směru produktu `agenti`. Agent může doporučit variantu, ale nesmí absenci rozhodnutí interpretovat jako souhlas.
 
 `agenti-lab` nemá roli Asistentky. Human může komunikovat přímo s K nebo se specializovanou rolí A/E/R/P podle potřeby.
 
-## 5. Durable work
+## 6. Durable work
 
 Chat není pracovní databáze.
 
@@ -96,14 +122,14 @@ Do GitHubu patří vše, co potřebuje další agent:
 - publish authorization,
 - výsledný `agenti/main` commit SHA.
 
-## 6. Hranice targetu
+## 7. Hranice targetu
 
 - Aktuální cílovou pravdu čti z `agenti/main`.
 - Vývojové Issues, decisions, audity a branches nevytvářej v `agenti`.
 - Pravidla hranice vlastní [`docs/repository-boundary.md`](docs/repository-boundary.md).
 - Pracovní postup vlastní [`docs/lab-workflow.md`](docs/lab-workflow.md).
 
-## 7. Branching
+## 8. Branching
 
 V `agenti-lab` jsou branches/PR legitimní, pokud pomáhají oddělit experiment, větší změnu nebo reviewovatelný návrh. Nevytvářej je mechanicky pro každou drobnost.
 
