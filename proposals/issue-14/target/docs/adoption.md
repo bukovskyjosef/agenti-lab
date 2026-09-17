@@ -62,9 +62,14 @@ Pokud automated run nemá jednoznačný active-role assignment, je to configurat
 
 ### Run-eligibility invariant
 
-Project Profile musí určit provider-neutral mechanismus, kterým orchestrace před drahým role runem porovná relevantní semantic state fingerprint s posledním applicable completed runem. Může jít o durable content/version tuple, hash nebo ekvivalentní deterministický mechanismus.
+Project Profile musí určit provider-neutral mechanismus, kterým orchestrace před drahým role runem vyhodnotí relevantní semantic state fingerprint a případný poslední applicable completed run stejné authority/purpose. Může jít o durable content/version tuple, hash nebo ekvivalentní deterministický mechanismus.
 
-Mechanismus musí potlačit semanticky no-op run před provider invocation, ale nesmí potlačit required run po material change relevantních contract/candidate/evidence/gate inputs nebo jiném objective progress reason podle `delivery-cycle.md`.
+Mechanismus musí explicitně rozlišit:
+
+- **first run** — pokud žádný applicable completed run stejné authority/purpose neexistuje, current již autorizovaný run je eligible; absence předchozího fingerprintu jej nesmí sama potlačit,
+- **subsequent run** — pokud applicable completed run existuje, nový run vyžaduje material change relevantních contract/candidate/evidence/gate inputs nebo jiný objective progress/retry reason podle `delivery-cycle.md`.
+
+First-run eligibility nikdy neobchází lifecycle, dependency, gate, terminal `Stopped` ani explicit-active-role guards. Mechanismus má potlačit semanticky no-op opakování před provider invocation, ne legitimní první provedení autorizovaného kroku.
 
 Pro `single-repo` je deklarace topologie a repository současně deklarací canonical ownership: stejný repozitář vlastní product-level governance, Human decisions, autoritativní work items, implementaci a product-level coordination state. Další topology fields nejsou potřeba.
 
@@ -216,7 +221,8 @@ Musí zároveň platit:
 
 - stejná session nedostane právo na jinou roli pouhým handoffem nebo změnou Issue state; explicit reassignment je nutný,
 - automated run bez unambiguous role assignment se nespustí,
-- duplicate/no-op event nespustí drahý role run, pokud relevantní semantic fingerprint od posledního applicable completed runu materiálně nezměnil a není jiný validní progress reason,
+- první již autorizovaný run pro danou authority/purpose se nesmí potlačit jen proto, že ještě neexistuje applicable completed run/fingerprint; všechny ostatní lifecycle/gate/terminal/active-role guards však stále platí,
+- pokud applicable completed run existuje, duplicate/no-op event nespustí drahý role run, pokud relevantní semantic fingerprint od něj materiálně nezměnil a není jiný validní progress/retry reason,
 - `Stopped` work se delayed/replayed eventem neobnoví,
 - Parent Intent se po změně child completion state mechanicky re-evaluuje a nezůstane otevřený, pokud jeho durable overall completion condition objektivně platí.
 
