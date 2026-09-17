@@ -4,15 +4,11 @@
 
 ## Cíl projektu
 
-Cílem je **maximálně vyladit referenční standard `agenti` tak, aby člověk dokázal co nejefektivněji využít potenciál specializovaných AI agentů k tvorbě a rozvoji produktu s co nejvyšší rozumnou mírou automatizace**.
+Cílem je **maximálně vyladit referenční standard `agenti` tak, aby člověk dokázal co nejefektivněji využít potenciál specializovaných AI agentů k tvorbě a rozvoji softwarového produktu s co nejvyšší rozumnou mírou automatizace**.
 
-„Produkt“ zde není omezen na software. Stejný základní model má být použitelný například pro:
+`agenti` je záměrně standard pro **software product development**. Má být použitelný napříč různými typy softwarových produktů a technologií, ale nemusí být univerzálním modelem pro knihy, povídky, obecné dokumenty nebo jiné nesofwarové artefakty.
 
-- aplikaci nebo službu,
-- dokumentaci nebo odborný dokument,
-- analýzu nebo výzkumný výstup,
-- knihu, povídku nebo jiný kreativní artefakt,
-- jiný verzovaný produkt, u kterého dává smysl zadání → zpracování → kontrola → schválení/publikace.
+Některé principy mohou být přenositelné i mimo software, to však není designový požadavek etalonu a nesmí kvůli tomu klesat přesnost jeho softwarového workflow.
 
 Maximální automatizace není cíl sama o sobě. Standard má automatizovat rutinní handoff a provedení tam, kde tím neklesá kvalita, neztrácí se lidská autorita a nevzniká zbytečná procesní režie.
 
