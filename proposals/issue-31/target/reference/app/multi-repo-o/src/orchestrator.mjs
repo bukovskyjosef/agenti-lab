@@ -701,8 +701,158 @@ export class MultiRepoOrchestrator {
     };
   }
 
+  async recoverFailedPlatformClaim(reconstructed, observedAt) {
+    const state = reconstructed.state;
+    const claim = state?.claim_control?.active_claim;
+    if (
+      !state?.assignment ||
+      !claim ||
+      claim.lease?.mode !== "PLATFORM_RUN" ||
+      reconstructed.snapshot.role_result
+    ) {
+      return null;
+    }
+    if (
+      state.material_operation?.claim_id === claim.claim_id &&
+      !["NOT_APPLIED"].includes(state.material_operation.status)
+    ) {
+      return null;
+    }
+
+    const assignment = assignmentEnvelopeFromState(
+      state,
+      this.profile,
+      observedAt
+    );
+    const target = runnerTarget(this.profile, assignment.role, assignment);
+    const runId = normalizedRunId(claim.owner?.platform_run_id);
+    const runAttempt = normalizedRunAttempt(
+      claim.owner?.platform_run_attempt ?? 1
+    );
+    if (!runId || !runAttempt) return null;
+
+    let verified;
+    try {
+      verified = await this.verifyRunnerWorkflowRun({
+        assignment,
+        runnerRepository: target.repository,
+        workflowRunId: runId,
+        workflowRunAttempt: runAttempt
+      });
+    } catch (error) {
+      if (String(error.message).includes("404")) return null;
+      throw error;
+    }
+    if (!verified.valid) return null;
+
+    let run;
+    try {
+      run = await this.gh.getWorkflowRun(target.repository, runId);
+    } catch (error) {
+      if (String(error.message).includes("404")) return null;
+      throw error;
+    }
+    const recoverable = new Set([
+      "failure",
+      "cancelled",
+      "timed_out",
+      "action_required",
+      "startup_failure",
+      "stale",
+      "neutral",
+      "skipped"
+    ]);
+    if (
+      run.status !== "completed" ||
+      !recoverable.has(String(run.conclusion ?? ""))
+    ) {
+      return null;
+    }
+
+    const recovered = this.core.recoverClaim({
+      state,
+      reason: "FAILED",
+      platformRunTerminalNonSuccess: true,
+      durableEvidenceRef:
+        "actions-run:" + target.repository + ":" + String(run.id)
+    });
+    if (!recovered.recovered) return null;
+
+    const nextState = recovered.state;
+    nextState.assignment = {
+      ...nextState.assignment,
+      dispatch_status: "pending",
+      workflow_run_id: null
+    };
+    nextState.updated_by = {
+      o_run_id:
+        "platform-run-recovery:" +
+        target.repository + ":" + String(run.id),
+      transition_id: state.updated_by?.transition_id ?? null,
+      idempotence_key:
+        "platform-run-recovery:" +
+        this.core.digest({
+          claim_id: claim.claim_id,
+          claim_generation: claim.claim_generation,
+          repository: target.repository,
+          run_id: String(run.id),
+          conclusion: run.conclusion
+        }).slice(7, 39)
+    };
+
+    const stateComment = await writeStateCas({
+      gh: this.gh,
+      workItem: state.work_item,
+      previous: state,
+      stateComment: reconstructed.stateComment,
+      nextState,
+      core: this.core,
+      trustedStateAppId: this.trustedStateAppId
+    });
+    return {
+      state: nextState,
+      stateComment,
+      recovered_claim_id: claim.claim_id,
+      platform_run_id: String(run.id),
+      platform_conclusion: run.conclusion
+    };
+  }
+
   async processWorkItem(workItem, observedAt = new Date().toISOString()) {
-    const reconstructed = await this.reconstruct(workItem, observedAt);
+    let reconstructed = await this.reconstruct(workItem, observedAt);
+
+    const recovery = await this.recoverFailedPlatformClaim(
+      reconstructed,
+      observedAt
+    );
+    if (recovery) {
+      reconstructed = {
+        ...reconstructed,
+        state: recovery.state,
+        stateComment: recovery.stateComment,
+        snapshot: {
+          ...reconstructed.snapshot,
+          role_result: null
+        }
+      };
+      const ensured = await this.ensureCurrentAssignmentDispatched(
+        reconstructed,
+        observedAt
+      );
+      return {
+        action: {
+          kind: "NO_OP",
+          reason: "PLATFORM_RUN_RECOVERED"
+        },
+        state: ensured.state,
+        dispatched: ensured.dispatched,
+        recovered: true,
+        recovered_claim_id: recovery.recovered_claim_id,
+        platform_run_id: recovery.platform_run_id,
+        platform_conclusion: recovery.platform_conclusion
+      };
+    }
+
     if (
       reconstructed.state.material_operation?.status === "PREPARED" ||
       reconstructed.state.material_operation?.status === "HUMAN_ACTION_REQUIRED"
