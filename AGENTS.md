@@ -41,6 +41,32 @@ Pokud některá podmínka neplatí, agent **nesmí začít požadovanou materiá
 
 Stejné pravidlo platí i tehdy, když prompt vznikl z dřívějšího handoffu. **Stale handoff prompt není authority. Aktuální repository state vždy rozhoduje, zda run smí začít.**
 
+### Exclusive claim před materiální prací
+
+Po úspěšném pre-run authority checku musí agent **ještě před první materiální prací** durable převzít přidělený work item pomocí jednoznačného **exclusive active claimu**.
+
+Claim znamená, že:
+
+- work item je `IN PROGRESS` právě u jedné aktivní role/session,
+- žádný druhý agent nesmí na stejném Issue zahájit materiální práci, **ani když má stejnou roli a stejný prompt**,
+- aktivní claim blokuje paralelní analýzu/editaci/review/publish téhož work itemu; legitimní paralelismus se řeší samostatnými child Issues/work items,
+- u exact-target práce claim zahrnuje konkrétní target/head/candidate binding, pokud existuje,
+- handoff prompt sám claim nevytváří; claim vzniká až při skutečném zahájení eligible runu.
+
+Durable stav musí být čitelný bez soukromého chatu, například jako `IN PROGRESS — R` / `CLAIMED BY E` plus claim metadata v Issue/PR. Minimální claim metadata jsou: aktivní role, jednoznačný claim/run identifikátor, čas převzetí a případný exact target/head binding.
+
+Pokud agent při startu najde **jiný aktivní claim**, provede no-op a oznámí, že work item je již převzatý. Nesmí vytvářet druhý claim ani pokračovat „jen částečně“.
+
+Claim se uvolňuje nebo nahrazuje pouze durable změnou stavu při:
+- řádném dokončení kroku a handoffu,
+- explicitním blockeru/abortu,
+- autorizovaném Human/K reassignmentu,
+- nebo při bezpečném stale-claim recovery podle durable evidence.
+
+Agent si **nesmí sám prohlásit cizí claim za stale** jen proto, že nevidí aktivitu. Pokud není definovaná automatická lease/heartbeat politika, stale claim odstraňuje K/Human po ověření situace. Pokud automatická orchestrace lease podporuje, musí být expiry/renewal explicitní a CAS/idempotentní.
+
+Změna exact targetu/headu během aktivního review/implementation claimu invaliduje původní binding. Agent nesmí tiše pokračovat na novém targetu pod starým claimem.
+
 Open Issues jsou pracovní fronta. **Nepřebírej další Issue svévolně**, pokud ti to člověk nebo aktuální kontrakt výslovně nezadal.
 
 Každý otevřený Issue nebo aktivní PR musí z durable stavu jednoznačně ukazovat, **na koho nebo na co aktuálně čeká**. Použij krátký status typu `READY FOR R`, `WAITING FOR HUMAN`, `WAITING FOR E`, `WAITING FOR P`, `BLOCKED BY #N` apod. Human ani K nesmí být nuceni rekonstruovat vlastníka dalšího kroku z historie komentářů.
