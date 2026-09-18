@@ -316,14 +316,34 @@ export function prepareMaterialOperation({
     state, assignmentId, claimId, claimGeneration, executionInstanceId
   });
   if (!verified.valid) return { prepared: false, reason: verified.reason, state };
-  if (state.material_operation?.status === "PREPARED") {
+  const operationId = materialOperationId({
+    state, claimId, claimGeneration, assignmentId, operationKind, targetBinding
+  });
+  if (state.material_operation?.material_operation_id === operationId) {
+    if (state.material_operation.status === "APPLIED") {
+      return {
+        prepared: false,
+        reason: "MATERIAL_OPERATION_ALREADY_APPLIED",
+        state,
+        material_operation: state.material_operation
+      };
+    }
+    if (state.material_operation.status === "PREPARED") {
+      return {
+        prepared: false,
+        reason: "MATERIAL_OPERATION_ALREADY_PREPARED",
+        state,
+        material_operation: state.material_operation
+      };
+    }
+  } else if (state.material_operation?.status === "PREPARED") {
     return { prepared: false, reason: "MATERIAL_OPERATION_ALREADY_PREPARED", state };
   }
+
   const next = structuredClone(state);
+  next.claim_control.claim_version += 1;
   next.material_operation = {
-    material_operation_id: materialOperationId({
-      state, claimId, claimGeneration, assignmentId, operationKind, targetBinding
-    }),
+    material_operation_id: operationId,
     status: "PREPARED",
     claim_id: claimId,
     claim_generation: claimGeneration,
@@ -353,13 +373,36 @@ export function resolveMaterialOperation({
   if (!state.material_operation || state.material_operation.material_operation_id !== id) {
     return { resolved: false, reason: "MATERIAL_OPERATION_NOT_CURRENT", state };
   }
+  if (state.material_operation.status === outcome) {
+    return {
+      resolved: true,
+      idempotent: true,
+      reason: outcome,
+      state,
+      material_operation: state.material_operation
+    };
+  }
+  if (state.material_operation.status !== "PREPARED") {
+    return {
+      resolved: false,
+      reason: "MATERIAL_OPERATION_NOT_PREPARED",
+      state
+    };
+  }
   const next = structuredClone(state);
+  next.claim_control.claim_version += 1;
   next.material_operation = {
     ...next.material_operation,
     status: outcome,
     evidence_ref: evidenceRef
   };
-  return { resolved: true, reason: outcome, state: next };
+  return {
+    resolved: true,
+    idempotent: false,
+    reason: outcome,
+    state: next,
+    material_operation: next.material_operation
+  };
 }
 
 export function verifyRoleResultClaim({ state, normalizedResult }) {
