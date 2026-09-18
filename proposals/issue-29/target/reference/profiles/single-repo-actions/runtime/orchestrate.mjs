@@ -365,7 +365,10 @@ async function createHumanRequest(github, issueNumber, state, action, roleResult
     request_id: requestId,
     type: proposed.type ?? "DECISION",
     status: "PENDING",
-    raised_by: roleResult?.role ?? (action.transition_id === "T03" ? "A" : "R"),
+    raised_by:
+      proposed.raised_by ??
+      roleResult?.role ??
+      (action.transition_id === "T03" ? "A" : "R"),
     context_digest: contextDigest,
     resolution_route: proposed.resolution_route ?? "ANALYST_REEVALUATE",
     question: proposed.question ?? "Human decision is required before automated delivery can continue."
@@ -758,8 +761,14 @@ async function applyTransitionSideEffects({
     };
   }
 
-  if (action.transition_id === "T03" || action.transition_id === "T07") {
-    await createHumanRequest(github, issue.number, next, action, roleResult?.normalized);
+  if (action.human_request) {
+    await createHumanRequest(
+      github,
+      issue.number,
+      next,
+      action,
+      roleResult?.normalized
+    );
     next.assignment = null;
   }
 
