@@ -59,7 +59,7 @@ jobs:
       - if: vars.AGENTI_TEST_MODE != 'true'
         uses: openai/codex-action@86365089eb2b84e0a8fb0717b304f8bdcb13b20e
         with:
-          openai-api-key: ${{ secrets[vars.AGENTI_CODEX_SECRET_NAME] }}
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           permission-profile: ":workspace"
           prompt-file: .agenti/prompts/D.md
           output-schema-file: .agenti-runtime/adapters/codex-action/schemas/developer-proposal.schema.json
