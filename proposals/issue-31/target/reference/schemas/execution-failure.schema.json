@@ -12,7 +12,9 @@
     "capacity_status",
     "transient",
     "observed_at",
-    "evidence_digest"
+    "evidence_digest",
+    "claim_id",
+    "claim_generation"
   ],
   "properties": {
     "failed_assignment_id": {
@@ -78,6 +80,14 @@
     "evidence_digest": {
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "claim_id": {
+      "type": "string",
+      "pattern": "^clm-"
+    },
+    "claim_generation": {
+      "type": "integer",
+      "minimum": 1
     }
   }
 }
