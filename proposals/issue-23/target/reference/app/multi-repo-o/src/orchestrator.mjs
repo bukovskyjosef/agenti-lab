@@ -4,7 +4,7 @@ import { findStateComment } from "./evidence.mjs";
 import { projectAdapterState } from "./state-projection.mjs";
 import { workItemKey } from "./mapping.mjs";
 
-function assignmentEnvelopeFromState(state, observedAt) {
+function assignmentEnvelopeFromState(state, profile, observedAt) {
   if (!state?.assignment) return null;
   const a = state.assignment;
   return {
@@ -34,13 +34,19 @@ function assignmentEnvelopeFromState(state, observedAt) {
         ref: `${state.work_item.control_repository}#${state.work_item.issue_number}`
       },
       { kind: "project_profile", ref: ".agenti/project-profile.json" },
-      { kind: "agent_entrypoint", ref: "AGENTS.md" }
+      { kind: "agent_entrypoint", ref: "AGENTS.md" },
+      ...(state.candidate?.members ?? []).map((member) => ({
+        kind: "candidate",
+        ref: `${member.repository}#${member.pr_number}@${member.head_sha}`
+      }))
     ],
     capability_profile: a.capability_profile,
     independence: {
       required: a.role === "R",
       must_differ_from_execution_instances: a.must_differ_from_execution_instances ?? [],
-      enforcement_mechanism: a.role === "R" ? "fresh-wrapper" : "none"
+      enforcement_mechanism: a.role === "R"
+        ? profile.role_runners.R.independence_mechanism
+        : "none"
     },
     completion: {
       result_schema_version: 1,
@@ -77,17 +83,22 @@ async function writeStateCas({ gh, workItem, previous, stateComment, nextState, 
   );
 }
 
-function assignmentMatchesState(assignment, state) {
+function comparableAssignment(assignment) {
+  if (!assignment) return null;
+  const { issued_at, ...rest } = assignment;
+  return rest;
+}
+
+function assignmentMatchesState(assignment, state, profile, core) {
+  const expected = assignmentEnvelopeFromState(
+    state,
+    profile,
+    assignment?.issued_at ?? state?.contract?.accepted_revision
+  );
   return Boolean(
-    state?.assignment &&
-    assignment?.assignment_id === state.assignment.assignment_id &&
-    assignment.role === state.assignment.role &&
-    assignment.purpose === state.assignment.purpose &&
-    assignment.capability_profile === state.assignment.capability_profile &&
-    assignment.state?.version === state.assignment.bound_state_version &&
-    assignment.state?.fingerprint === state.assignment.fingerprint &&
-    assignment.state?.contract_digest === state.contract.digest &&
-    assignment.candidate?.digest === state.candidate.digest
+    expected &&
+    core.digest(comparableAssignment(assignment)) ===
+      core.digest(comparableAssignment(expected))
   );
 }
 
@@ -112,7 +123,7 @@ export class MultiRepoOrchestrator {
   }
 
   async ensureCurrentAssignmentDispatched(state, observedAt) {
-    const assignment = assignmentEnvelopeFromState(state, observedAt);
+    const assignment = assignmentEnvelopeFromState(state, this.profile, observedAt);
     if (!assignment) return null;
     return dispatchAssignment({
       gh: this.gh,
@@ -204,7 +215,12 @@ export class MultiRepoOrchestrator {
     }
 
     const reconstructed = await this.reconstruct(workItem);
-    if (!assignmentMatchesState(assignment, reconstructed.state)) {
+    if (!assignmentMatchesState(
+      assignment,
+      reconstructed.state,
+      this.profile,
+      this.core
+    )) {
       return { valid: false, reason: "ASSIGNMENT_NOT_CURRENT" };
     }
     if (reconstructed.snapshot.role_result) {
