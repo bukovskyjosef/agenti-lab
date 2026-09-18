@@ -79,6 +79,23 @@ export function projectAdapterState({ core, state, action, snapshot, profile, oR
     : initializeState({ action, snapshot, profile, oRunId });
 
   const roleResult = snapshot.role_result;
+
+  if (roleResult && state?.assignment && roleResult.execution_instance_id) {
+    next.run_receipts[state.assignment.assignment_id] = {
+      fingerprint: state.assignment.fingerprint,
+      assignment_id: state.assignment.assignment_id,
+      execution_instance_id: roleResult.execution_instance_id
+    };
+  }
+
+  if (
+    roleResult &&
+    !action.assignment &&
+    ["T07", "T08", "T11", "T12"].includes(action.transition_id)
+  ) {
+    next.assignment = null;
+  }
+
   if (roleResult?.role === "D" && action.transition_id === "T04") {
     next.review = {
       status: "PENDING",
@@ -134,6 +151,8 @@ export function projectAdapterState({ core, state, action, snapshot, profile, oR
   if (action.transition_id === "T17") next.stop.record_ref = null;
 
   if (action.transition_id === "T19") {
+    next.assignment = null;
+    next.checks = snapshot.checks ?? next.checks;
     next.review = {
       ...next.review,
       status: next.review.status === "NOT_STARTED" ? "NOT_STARTED" : "STALE",
