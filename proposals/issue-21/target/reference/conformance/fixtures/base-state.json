@@ -19,6 +19,7 @@
     "role": "A",
     "purpose": "SHAPE_INTENT",
     "issued_from_state_version": 2,
+    "bound_state_version": 3,
     "fingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     "capability_profile": "A_READ_ANALYZE",
     "dispatch_status": "running",
@@ -49,8 +50,11 @@
   },
   "release_authorization": {
     "status": "NOT_REQUIRED",
+    "authorization_id": null,
     "candidate_digest": null,
     "target_digest": null,
+    "gate_digest": null,
+    "context_digest": null,
     "request_ref": null,
     "response_ref": null,
     "human_actor_id": null
