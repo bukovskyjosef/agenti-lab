@@ -1,5 +1,6 @@
 import {
   STATE_MARKER,
+  digest,
   parseStateComment,
   reconstructState,
   renderStateComment,
@@ -41,6 +42,14 @@ export async function loadState(github, issueNumber, workflowStateSchema) {
   return { state: reconstructState(matches[0].body, workflowStateSchema), comment: matches[0], comments };
 }
 
+function projectionDigest(state) {
+  return digest(state);
+}
+
+function projectionMatches(actual, desired) {
+  return projectionDigest(actual) === projectionDigest(desired);
+}
+
 export async function saveStateCAS(
   github,
   issueNumber,
@@ -56,7 +65,23 @@ export async function saveStateCAS(
   if (!currentComment) {
     if (expectedStateVersion !== null) throw new Error("Initial state expected version must be null");
     if (expectedClaimVersion !== null) throw new Error("Initial claim version must be null");
-    return github.createIssueComment(issueNumber, renderStateComment(state));
+    try {
+      return await github.createIssueComment(issueNumber, renderStateComment(state));
+    } catch (error) {
+      const comments = await github.listIssueComments(issueNumber);
+      const durable = comments
+        .filter((comment) => isTrustedActionsActor(comment))
+        .filter((comment) => comment.body?.includes(STATE_MARKER))
+        .find((comment) => {
+          try {
+            return projectionMatches(parseStateComment(comment.body), state);
+          } catch {
+            return false;
+          }
+        });
+      if (durable) return durable;
+      throw error;
+    }
   }
 
   const fresh = await github.getIssueComment(currentComment.id);
@@ -70,7 +95,31 @@ export async function saveStateCAS(
       " got " + (current.claim_control?.claim_version ?? 0)
     );
   }
-  return github.updateIssueComment(fresh.id, renderStateComment(state));
+
+  const desiredBody = renderStateComment(state);
+  try {
+    return await github.updateIssueComment(fresh.id, desiredBody);
+  } catch (firstError) {
+    const after = await github.getIssueComment(fresh.id);
+    const observed = parseStateComment(after.body);
+    if (projectionMatches(observed, state)) return after;
+
+    if (!projectionMatches(observed, current)) {
+      throw new Error(
+        "CAS_AMBIGUOUS_CONFLICT after failed projection write: " +
+        String(firstError.message ?? firstError)
+      );
+    }
+
+    try {
+      return await github.updateIssueComment(after.id, desiredBody);
+    } catch (secondError) {
+      const final = await github.getIssueComment(after.id);
+      const finalState = parseStateComment(final.body);
+      if (projectionMatches(finalState, state)) return final;
+      throw secondError;
+    }
+  }
 }
 
 export function findAssignmentAudit(comments, assignmentId) {
