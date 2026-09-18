@@ -691,11 +691,7 @@
               "minimum": 0
             },
             "on_max_wait": {
-              "enum": [
-                "HUMAN",
-                "BLOCK",
-                "FAIL"
-              ]
+              "const": "HUMAN"
             },
             "minimum_reconcile_seconds": {
               "type": "integer",
