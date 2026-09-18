@@ -1,4 +1,4 @@
-# Agenti reference — cost/capacity routing + Interface amendment
+# Agenti reference — routing, Interface and exclusive execution ownership
 
 This is the additive Child #5 overlay authorized by `agenti-lab#26` and implemented by Issue #29.
 
@@ -84,3 +84,29 @@ A routing wait is bounded. At the configured `max_wait_deadline`, the supported 
 - `adapters/codex-action/` — retained optional Codex adapter.
 
 No provider is normative.
+
+
+## Exclusive execution ownership — Child #6
+
+An explicit A/D/R/P assignment is necessary but not sufficient for material execution.
+
+Child #6 adds:
+- one bounded authoritative `claim_control` in the GitHub O projection;
+- separate monotonic `claim_version`;
+- exactly one active material role claim per executable work item;
+- one shared per-work-item mutation/fencing domain;
+- claim-bound results and routing failures;
+- deterministic material-operation identity and ambiguous-write recovery;
+- Actions PLATFORM_RUN recovery, exact Human recovery for NONE claims and optional heartbeat semantics;
+- multi-repo PREPARED/RESOLVE fencing for remote material writers.
+
+No new authority role or lifecycle state is introduced. H/A/D/R/P remain authority roles; I/O remain system functions.
+
+See:
+- `CLAIM_AND_FENCING.md`;
+- `docs/principles.md`;
+- `docs/roles.md`;
+- `docs/delivery-cycle.md`;
+- `docs/automation.md`;
+- `docs/adoption.md`;
+- `docs/work-item.md`.
