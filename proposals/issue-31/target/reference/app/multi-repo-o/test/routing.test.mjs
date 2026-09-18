@@ -266,7 +266,13 @@ function fakeGitHub({ issue, state }) {
       workflow_id: 120,
       run_attempt: 1,
       event: "workflow_dispatch",
+      status: "in_progress",
+      conclusion: null,
       repository: { full_name: "acme/service-a" }
+    }),
+    getBranch: async (_repo, branch) => ({
+      name: branch,
+      commit: { sha: "b".repeat(40) }
     }),
     workflowDispatch: async () => {
       throw new Error("T14 should wait in this regression");
@@ -462,6 +468,44 @@ test("multi-repo material writer uses durable PREPARED fence before sink", async
   const active = built.state.claim_control.active_claim;
   const beforeClaimVersion = built.state.claim_control.claim_version;
 
+  const notAllowlisted = await orchestrator.prepareMaterialWrite({
+    assignment,
+    runnerRepository: "acme/service-a",
+    workflowRunId: "7001",
+    workflowRunAttempt: "1",
+    claimId: active.claim_id,
+    claimGeneration: active.claim_generation,
+    operationKind: "D_DELETE_REPOSITORY",
+    targetBinding: {
+      repository: "acme/service-a"
+    },
+    preparedAt: OBSERVED
+  });
+  assert.equal(notAllowlisted.valid, false);
+  assert.equal(
+    notAllowlisted.reason,
+    "MATERIAL_OPERATION_NOT_ALLOWLISTED"
+  );
+
+  const staleBase = await orchestrator.prepareMaterialWrite({
+    assignment,
+    runnerRepository: "acme/service-a",
+    workflowRunId: "7001",
+    workflowRunAttempt: "1",
+    claimId: active.claim_id,
+    claimGeneration: active.claim_generation,
+    operationKind: "D_CANDIDATE_REF_WRITE",
+    targetBinding: {
+      repository: "acme/service-a",
+      ref: "refs/heads/agenti/issue-42",
+      base_ref: "main",
+      expected_base_sha: "c".repeat(40)
+    },
+    preparedAt: OBSERVED
+  });
+  assert.equal(staleBase.valid, false);
+  assert.equal(staleBase.reason, "D_DEFAULT_BASE_NOT_CURRENT");
+
   const prepared = await orchestrator.prepareMaterialWrite({
     assignment,
     runnerRepository: "acme/service-a",
@@ -473,7 +517,8 @@ test("multi-repo material writer uses durable PREPARED fence before sink", async
     targetBinding: {
       repository: "acme/service-a",
       ref: "refs/heads/agenti/issue-42",
-      expected_base: "main"
+      base_ref: "main",
+      expected_base_sha: "b".repeat(40)
     },
     preparedAt: OBSERVED
   });
@@ -545,7 +590,8 @@ test("multi-repo material writer uses durable PREPARED fence before sink", async
     targetBinding: {
       repository: "acme/service-a",
       ref: "refs/heads/agenti/issue-42",
-      expected_base: "main"
+      base_ref: "main",
+      expected_base_sha: "b".repeat(40)
     },
     preparedAt: OBSERVED
   });
