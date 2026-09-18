@@ -19,7 +19,8 @@ const schemas = {
   assignment: await readJson(resolve(schemaDir, "assignment.schema.json")),
   roleResult: await readJson(resolve(schemaDir, "role-result.schema.json")),
   capacityObservation: await readJson(resolve(schemaDir, "capacity-observation.schema.json")),
-  billingSafety: await readJson(resolve(schemaDir, "billing-safety.schema.json"))
+  billingSafety: await readJson(resolve(schemaDir, "billing-safety.schema.json")),
+  executionFailure: await readJson(resolve(schemaDir, "execution-failure.schema.json"))
 };
 const transitionTable = await readJson(resolve(root, "core/transitions.json"));
 const projectProfile = await readJson(profilePath);
@@ -42,7 +43,7 @@ if (!result.ok) {
   process.exitCode = 1;
 } else {
   console.log("agenti core doctor: OK");
-  console.log("- schemas: 6 valid local-ref contracts");
+  console.log("- schemas: 7 valid local-ref contracts");
   console.log("- transitions: T01-T19 coherent");
   console.log("- O/P privilege split: coherent");
   console.log("- R independence mechanism: configured");
