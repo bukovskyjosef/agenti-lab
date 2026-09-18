@@ -26,7 +26,9 @@ Bind the review to the exact PR head. Any head change invalidates the review.
 
 ## Billing
 - [ ] credential presence does not grant spend authority;
-- [ ] strict `INCLUDED_ALLOWANCE + FORBIDDEN` fails closed on unknown/possible paid spillover;
+- [ ] every `INCLUDED_ALLOWANCE` candidate remains fail-closed on unknown/possible paid spillover regardless of FORBIDDEN vs ALLOWED_WITH_BUDGET policy;
+- [ ] INCLUDED_ALLOWANCE cannot declare incremental paid usage; any paid overflow is represented as a separate paid candidate;
+- [ ] ALLOWED_WITH_BUDGET requires explicit budget + enforcement and every reachable PREPAID/METERED candidate has a hard limit;
 - [ ] OAuth/API-key absence alone is not treated as hard no-spend proof;
 - [ ] Claude workflow references only OAuth credential and explicitly fails on injected `ANTHROPIC_API_KEY`;
 - [ ] metered/prepaid route requires explicit budget authority + enforceable hard cap;
@@ -39,7 +41,10 @@ Bind the review to the exact PR head. Any head change invalidates the review.
 - [ ] pre-dispatch all-exhausted case creates bounded routing wait and no provider invocation;
 - [ ] pre-due reconcile is cheap/suppressed;
 - [ ] due reconcile fresh-reads and reselects;
+- [ ] at max_wait_deadline the wait does not repeat: supported HUMAN mode uses T15/H boundary and clears routing wait;
+- [ ] unsupported BLOCK/FAIL max-wait modes are schema-invalid rather than dead policy;
 - [ ] current execution failure is wrapper/O evidence, not provider prose authority;
+- [ ] accepted routing-recoverable UNAVAILABLE is T14-routable and cannot strand the current assignment;
 - [ ] T14 keeps the same role/purpose authority;
 - [ ] failed assignment is marked failed-before-result;
 - [ ] routing generation increments once;
