@@ -60,12 +60,11 @@ export function validateMultiRepoRuntimeConfig(config, core) {
   }
   if (
     (config.instanceCount ?? 1) > 1 &&
-    String(config.projectProfile.work_item_claims?.mutation_domain ?? "")
-      .toLowerCase()
-      .includes("sqlite")
+    config.projectProfile.work_item_claims?.mutation_domain ===
+      "single-instance-nonexpiring-process-fence"
   ) {
     errors.push(
-      "multi-instance App cannot use a local SQLite work-item mutation domain"
+      "multi-instance App cannot use the single-instance non-expiring process mutation fence"
     );
   }
   if (config.projectProfile.repository_topology !== "multi-repo") errors.push("multi-repo-o requires repository_topology=multi-repo");
