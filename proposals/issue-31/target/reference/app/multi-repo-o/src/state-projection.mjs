@@ -52,6 +52,12 @@ export function initializeState({ action, snapshot, profile, oRunId }) {
       published_identity: null
     },
     run_receipts: {},
+    claim_control: {
+      claim_version: 0,
+      active_claim: null,
+      last_terminal: null
+    },
+    material_operation: null,
     failure: { active_ref: null, retry_reason: null, non_convergent: false },
     stop: { record_ref: null },
     updated_by: {
@@ -346,6 +352,14 @@ export function projectInvalidationState({
     }
   }
 
+  if (state.claim_control?.active_claim) {
+    const terminalized = core.terminalizeClaim({
+      state: next,
+      terminalReason: "REVOKED_DRIFT"
+    });
+    next.claim_control = terminalized.state.claim_control;
+  }
+
   next.updated_by = {
     o_run_id: oRunId,
     transition_id: state.updated_by.transition_id,
@@ -371,6 +385,7 @@ export function projectAdapterState({ core, state, action, snapshot, profile, oR
     : initializeState({ action, snapshot, profile, oRunId });
 
   const roleResult = snapshot.role_result;
+  const activeClaim = state?.claim_control?.active_claim ?? null;
 
   if (roleResult && state?.assignment && roleResult.execution_instance_id) {
     next.run_receipts[state.assignment.assignment_id] = {
@@ -378,6 +393,12 @@ export function projectAdapterState({ core, state, action, snapshot, profile, oR
       fingerprint: state.assignment.fingerprint,
       assignment_id: state.assignment.assignment_id,
       execution_instance_id: roleResult.execution_instance_id,
+      ...(activeClaim
+        ? {
+            claim_id: activeClaim.claim_id,
+            claim_generation: activeClaim.claim_generation
+          }
+        : {}),
       ...(state.assignment.semantic_work_digest
         ? {
             role: state.assignment.role,
@@ -470,6 +491,29 @@ export function projectAdapterState({ core, state, action, snapshot, profile, oR
     }
     if (!["NOT_STARTED", "FAILED"].includes(next.publication.status)) {
       next.publication = { ...next.publication, status: "STALE" };
+    }
+  }
+
+  if (activeClaim) {
+    let terminalReason = null;
+    if (roleResult) {
+      terminalReason =
+        roleResult.status === "BLOCKED" ? "BLOCKED" :
+        roleResult.status === "FAILED" ? "FAILED" :
+        "COMPLETED";
+    } else if (action.transition_id === "T14") {
+      terminalReason = "REROUTED";
+    } else if (action.transition_id === "T16") {
+      terminalReason = "REVOKED_STOP";
+    }
+    if (terminalReason) {
+      next = core.terminalizeClaim({
+        state: next,
+        terminalReason,
+        durableEvidenceRef: roleResult?.evidence_binding?.object_id
+          ? String(roleResult.evidence_binding.object_id)
+          : null
+      }).state;
     }
   }
 
