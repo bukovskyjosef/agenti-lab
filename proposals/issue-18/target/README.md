@@ -70,7 +70,7 @@ Agent začíná v [`AGENTS.md`](AGENTS.md). Mapa standardu je v [`docs/README.md
 - [`docs/delivery-cycle.md`](docs/delivery-cycle.md) — end-to-end workflow, termination a release model,
 - [`docs/work-item.md`](docs/work-item.md) — pracovní kontrakt, Parent Intent, Definition of Ready a durable state,
 - [`docs/review.md`](docs/review.md) — nezávislé review a corrective loop,
-- [`docs/automation.md`](docs/automation.md) — event-driven orchestrace, run eligibility a bezpečnost automatizace,
+- [`docs/automation.md`](docs/automation.md) — event-driven O model, run eligibility a bezpečnost automatizace,
 - [`docs/adoption.md`](docs/adoption.md) — jak standard zavést do nového nebo existujícího projektu.
 
 ## Co je projektově konfigurovatelné
