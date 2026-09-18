@@ -73,6 +73,8 @@ function reviewerAssignment(authorInstance = "exec-author-1") {
 function trustedFacts(assignment, executionInstance = "exec-review-2", mode = "fresh") {
   return {
     assignment_id: assignment.assignment_id,
+    claim_id: "clm-test-current",
+    claim_generation: 1,
     observed_state_version: assignment.state.version,
     observed_fingerprint: assignment.state.fingerprint,
     execution_attestation: {
