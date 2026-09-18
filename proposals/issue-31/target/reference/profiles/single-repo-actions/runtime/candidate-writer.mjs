@@ -87,7 +87,8 @@ export async function writeCandidate({
     runtime,
     state,
     assignment,
-    comments: loaded.comments
+    comments: loaded.comments,
+    checkRouting: false
   });
   if (!writerCurrent.current) {
     throw new Error("D_WRITE_CURRENTNESS_FAILED: " + writerCurrent.reason);
