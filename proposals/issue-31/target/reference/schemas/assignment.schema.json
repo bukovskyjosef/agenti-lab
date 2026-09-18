@@ -16,7 +16,8 @@
     "context_entrypoints",
     "capability_profile",
     "independence",
-    "completion"
+    "completion",
+    "claim"
   ],
   "properties": {
     "schema_version": {
@@ -189,6 +190,18 @@
     },
     "execution_route": {
       "$ref": "#/$defs/executionRoute"
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required"
+      ],
+      "properties": {
+        "required": {
+          "const": true
+        }
+      }
     }
   },
   "$defs": {
