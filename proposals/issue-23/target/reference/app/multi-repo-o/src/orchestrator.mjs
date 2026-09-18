@@ -1,7 +1,10 @@
 import { dispatchAssignment, runnerTarget } from "./dispatch.mjs";
 import { reconstructAuthority } from "./authority.mjs";
 import { findStateComment } from "./evidence.mjs";
-import { projectAdapterState } from "./state-projection.mjs";
+import {
+  projectAdapterState,
+  projectInvalidationState
+} from "./state-projection.mjs";
 import { workItemKey } from "./mapping.mjs";
 
 function assignmentEnvelopeFromState(state, profile, observedAt) {
@@ -65,7 +68,10 @@ async function writeStateCas({
   core,
   trustedStateAppId
 }) {
-  const freshComments = await gh.listIssueComments(workItem.control_repository, workItem.issue_number);
+  const freshComments = await gh.listIssueComments(
+    workItem.control_repository,
+    workItem.issue_number
+  );
   const freshStateComment = findStateComment(
     freshComments,
     core,
@@ -84,10 +90,15 @@ async function writeStateCas({
   if (!freshStateComment || freshStateComment.id !== stateComment?.id) {
     throw new Error("STATE_VERSION_CAS_MISMATCH");
   }
+
   const fresh = core.parseStateComment(freshStateComment.body);
-  if (fresh.state_version !== previous.state_version) {
+  if (
+    fresh.state_version !== previous.state_version ||
+    core.digest(fresh) !== core.digest(previous)
+  ) {
     throw new Error("STATE_VERSION_CAS_MISMATCH");
   }
+
   return gh.updateIssueComment(
     workItem.control_repository,
     freshStateComment.id,
@@ -112,6 +123,55 @@ function assignmentMatchesState(assignment, state, profile, core) {
     core.digest(comparableAssignment(assignment)) ===
       core.digest(comparableAssignment(expected))
   );
+}
+
+function normalizedRunId(value) {
+  if (value === null || value === undefined || value === "") return null;
+  return String(value);
+}
+
+function normalizedRunAttempt(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 1 ? number : null;
+}
+
+function claimedState({
+  state,
+  assignment,
+  runId,
+  runAttempt,
+  status,
+  executionInstanceId,
+  core,
+  oRunId
+}) {
+  const next = structuredClone(state);
+  next.assignment = {
+    ...next.assignment,
+    dispatch_status: status,
+    workflow_run_id: runId
+  };
+  next.run_receipts = {
+    ...next.run_receipts,
+    [assignment.assignment_id]: {
+      fingerprint: assignment.state.fingerprint,
+      assignment_id: assignment.assignment_id,
+      execution_instance_id: executionInstanceId
+    }
+  };
+  next.updated_by = {
+    o_run_id: oRunId,
+    transition_id: state.updated_by.transition_id,
+    idempotence_key:
+      "agenti-run-claim:" +
+      core.digest({
+        assignment_id: assignment.assignment_id,
+        run_id: runId,
+        run_attempt: runAttempt,
+        status
+      }).slice(7, 39)
+  };
+  return next;
 }
 
 export class MultiRepoOrchestrator {
@@ -144,15 +204,213 @@ export class MultiRepoOrchestrator {
     });
   }
 
-  async ensureCurrentAssignmentDispatched(state, observedAt) {
-    const assignment = assignmentEnvelopeFromState(state, this.profile, observedAt);
-    if (!assignment) return null;
-    return dispatchAssignment({
+  async verifyRunnerWorkflowRun({
+    assignment,
+    runnerRepository,
+    workflowRunId,
+    workflowRunAttempt
+  }) {
+    const target = runnerTarget(this.profile, assignment.role);
+    if (runnerRepository !== target.repository) {
+      return { valid: false, reason: "RUNNER_REPOSITORY_MISMATCH" };
+    }
+
+    const runId = normalizedRunId(workflowRunId);
+    const runAttempt = normalizedRunAttempt(workflowRunAttempt);
+    if (!runId || !runAttempt) {
+      return { valid: false, reason: "WORKFLOW_RUN_IDENTITY_REQUIRED" };
+    }
+
+    const [workflow, run] = await Promise.all([
+      this.gh.getWorkflow(target.repository, target.workflow),
+      this.gh.getWorkflowRun(target.repository, runId)
+    ]);
+
+    const runRepository =
+      run.repository?.full_name ?? run.head_repository?.full_name ?? null;
+    if (runRepository !== target.repository) {
+      return { valid: false, reason: "WORKFLOW_RUN_REPOSITORY_MISMATCH" };
+    }
+    if (Number(run.workflow_id) !== Number(workflow.id)) {
+      return { valid: false, reason: "WORKFLOW_RUN_WORKFLOW_MISMATCH" };
+    }
+    if (String(run.id) !== runId) {
+      return { valid: false, reason: "WORKFLOW_RUN_ID_MISMATCH" };
+    }
+    if (Number(run.run_attempt) !== runAttempt) {
+      return { valid: false, reason: "WORKFLOW_RUN_ATTEMPT_MISMATCH" };
+    }
+    if (run.event !== "workflow_dispatch") {
+      return { valid: false, reason: "WORKFLOW_RUN_EVENT_MISMATCH" };
+    }
+
+    return {
+      valid: true,
+      target,
+      run_id: runId,
+      run_attempt: runAttempt,
+      execution_instance_id:
+        `github-actions:${target.repository}:${runId}:${runAttempt}`
+    };
+  }
+
+  async bindAssignmentRun({
+    reconstructed,
+    assignment,
+    runnerRepository,
+    workflowRunId,
+    workflowRunAttempt,
+    status
+  }) {
+    const verified = await this.verifyRunnerWorkflowRun({
+      assignment,
+      runnerRepository,
+      workflowRunId,
+      workflowRunAttempt
+    });
+    if (!verified.valid) return verified;
+
+    const currentOwner = normalizedRunId(
+      reconstructed.state?.assignment?.workflow_run_id
+    );
+    if (currentOwner && currentOwner !== verified.run_id) {
+      return {
+        valid: false,
+        reason: "ASSIGNMENT_RUN_OWNERSHIP_CONFLICT",
+        workflow_run_id: currentOwner
+      };
+    }
+
+    if (
+      currentOwner === verified.run_id &&
+      reconstructed.state.assignment.dispatch_status === status
+    ) {
+      return {
+        ...verified,
+        state: reconstructed.state,
+        stateComment: reconstructed.stateComment,
+        already_claimed: true
+      };
+    }
+
+    const nextState = claimedState({
+      state: reconstructed.state,
+      assignment,
+      runId: verified.run_id,
+      runAttempt: verified.run_attempt,
+      status,
+      executionInstanceId: verified.execution_instance_id,
+      core: this.core,
+      oRunId:
+        `run-claim:${assignment.assignment_id}:${verified.run_id}:${verified.run_attempt}`
+    });
+
+    try {
+      const stateComment = await writeStateCas({
+        gh: this.gh,
+        workItem: reconstructed.state.work_item,
+        previous: reconstructed.state,
+        stateComment: reconstructed.stateComment,
+        nextState,
+        core: this.core,
+        trustedStateAppId: this.trustedStateAppId
+      });
+      return {
+        ...verified,
+        state: nextState,
+        stateComment,
+        already_claimed: currentOwner === verified.run_id
+      };
+    } catch (error) {
+      if (error.message !== "STATE_VERSION_CAS_MISMATCH") throw error;
+
+      const refreshed = await this.reconstruct(reconstructed.state.work_item);
+      const refreshedOwner = normalizedRunId(
+        refreshed.state?.assignment?.workflow_run_id
+      );
+      if (
+        refreshed.state?.assignment?.assignment_id === assignment.assignment_id &&
+        refreshedOwner === verified.run_id
+      ) {
+        return {
+          ...verified,
+          state: refreshed.state,
+          stateComment: refreshed.stateComment,
+          already_claimed: true
+        };
+      }
+
+      return {
+        valid: false,
+        reason: "ASSIGNMENT_RUN_CLAIM_CAS_LOST",
+        workflow_run_id: refreshedOwner
+      };
+    }
+  }
+
+  async ensureCurrentAssignmentDispatched(reconstructed, observedAt) {
+    const state = reconstructed.state;
+    const assignment = assignmentEnvelopeFromState(
+      state,
+      this.profile,
+      observedAt
+    );
+    if (!assignment) {
+      return { state, stateComment: reconstructed.stateComment, dispatched: null };
+    }
+
+    if (state.assignment.workflow_run_id !== null &&
+        state.assignment.workflow_run_id !== undefined) {
+      return {
+        state,
+        stateComment: reconstructed.stateComment,
+        dispatched: {
+          dispatched: false,
+          duplicate: true,
+          durable_claim: true,
+          workflow_run_id: state.assignment.workflow_run_id,
+          target: runnerTarget(this.profile, assignment.role)
+        }
+      };
+    }
+
+    const dispatched = await dispatchAssignment({
       gh: this.gh,
       profile: this.profile,
       assignment,
       store: this.store
     });
+
+    if (!dispatched.workflow_run_id) {
+      return {
+        state,
+        stateComment: reconstructed.stateComment,
+        dispatched
+      };
+    }
+
+    const claim = await this.bindAssignmentRun({
+      reconstructed,
+      assignment,
+      runnerRepository: dispatched.target.repository,
+      workflowRunId: dispatched.workflow_run_id,
+      workflowRunAttempt: dispatched.run_attempt ?? 1,
+      status: "dispatched"
+    });
+
+    if (!claim.valid) {
+      throw new Error(`DURABLE_RUN_CLAIM_FAILED:${claim.reason}`);
+    }
+
+    return {
+      state: claim.state,
+      stateComment: claim.stateComment,
+      dispatched: {
+        ...dispatched,
+        durable_claim: true,
+        execution_instance_id: claim.execution_instance_id
+      }
+    };
   }
 
   async processWorkItem(workItem, observedAt = new Date().toISOString()) {
@@ -170,22 +428,56 @@ export class MultiRepoOrchestrator {
     }
 
     if (action.kind === "INVALIDATE") {
+      const oRunId =
+        `o:${workItemKey(workItem)}:invalidate:${reconstructed.state.state_version}`;
+      const nextState = projectInvalidationState({
+        core: this.core,
+        state: reconstructed.state,
+        action,
+        snapshot: reconstructed.snapshot,
+        profile: this.profile,
+        transitionTable: this.transitionTable,
+        observedAt,
+        oRunId
+      });
+
+      await writeStateCas({
+        gh: this.gh,
+        workItem,
+        previous: reconstructed.state,
+        stateComment: reconstructed.stateComment,
+        nextState,
+        core: this.core,
+        trustedStateAppId: this.trustedStateAppId
+      });
+
       return {
         action,
-        state: reconstructed.state,
+        state: nextState,
         dispatched: null,
-        safe_hold: true
+        safe_hold: false,
+        invalidation_projected: true
       };
     }
 
     if (action.kind === "NO_OP") {
-      const dispatched = reconstructed.snapshot.role_result
-        ? null
-        : await this.ensureCurrentAssignmentDispatched(reconstructed.state, observedAt);
-      return { action, state: reconstructed.state, dispatched };
+      if (reconstructed.snapshot.role_result) {
+        return { action, state: reconstructed.state, dispatched: null };
+      }
+      const ensured = await this.ensureCurrentAssignmentDispatched(
+        reconstructed,
+        observedAt
+      );
+      return {
+        action,
+        state: ensured.state,
+        dispatched: ensured.dispatched
+      };
     }
 
-    if (action.kind !== "TRANSITION") throw new Error(`Unsupported core action ${action.kind}`);
+    if (action.kind !== "TRANSITION") {
+      throw new Error(`Unsupported core action ${action.kind}`);
+    }
 
     const oRunId = `o:${workItemKey(workItem)}:${action.idempotence_key}`;
     const nextState = projectAdapterState({
@@ -197,7 +489,7 @@ export class MultiRepoOrchestrator {
       oRunId
     });
 
-    await writeStateCas({
+    const stateComment = await writeStateCas({
       gh: this.gh,
       workItem,
       previous: reconstructed.state,
@@ -207,19 +499,32 @@ export class MultiRepoOrchestrator {
       trustedStateAppId: this.trustedStateAppId
     });
 
-    const dispatched = action.assignment
-      ? await dispatchAssignment({
-          gh: this.gh,
-          profile: this.profile,
-          assignment: action.assignment,
-          store: this.store
-        })
-      : null;
+    if (!action.assignment) {
+      return { action, state: nextState, dispatched: null };
+    }
 
-    return { action, state: nextState, dispatched };
+    const ensured = await this.ensureCurrentAssignmentDispatched(
+      {
+        ...reconstructed,
+        state: nextState,
+        stateComment
+      },
+      observedAt
+    );
+
+    return {
+      action,
+      state: ensured.state,
+      dispatched: ensured.dispatched
+    };
   }
 
-  async verifyAssignment(assignment, runnerRepository) {
+  async verifyAssignment(
+    assignment,
+    runnerRepository,
+    workflowRunId,
+    workflowRunAttempt
+  ) {
     const workItem = {
       control_repository: assignment.work_item?.control_repository,
       issue_number: assignment.work_item?.issue_number,
@@ -257,7 +562,10 @@ export class MultiRepoOrchestrator {
       { observed_at: new Date().toISOString() },
       this.transitionTable
     );
-    if (action.kind !== "NO_OP" || action.reason !== "NO_AUTHORIZED_TRANSITION") {
+    if (
+      action.kind !== "NO_OP" ||
+      action.reason !== "NO_AUTHORIZED_TRANSITION"
+    ) {
       return {
         valid: false,
         reason: "AUTHORITY_CHANGED_BEFORE_ROLE_START",
@@ -266,11 +574,32 @@ export class MultiRepoOrchestrator {
       };
     }
 
+    const claim = await this.bindAssignmentRun({
+      reconstructed,
+      assignment,
+      runnerRepository,
+      workflowRunId,
+      workflowRunAttempt,
+      status: "running"
+    });
+    if (!claim.valid) {
+      return {
+        valid: false,
+        reason: claim.reason,
+        workflow_run_id: claim.workflow_run_id ?? null
+      };
+    }
+
     return {
       valid: true,
-      reason: "CURRENT_EXPLICIT_ASSIGNMENT",
-      state_version: reconstructed.state.state_version,
-      candidate_digest: reconstructed.state.candidate.digest
+      reason: claim.already_claimed
+        ? "CURRENT_EXPLICIT_ASSIGNMENT_RUN_CONFIRMED"
+        : "CURRENT_EXPLICIT_ASSIGNMENT_RUN_CLAIMED",
+      state_version: claim.state.state_version,
+      candidate_digest: claim.state.candidate.digest,
+      workflow_run_id: claim.run_id,
+      run_attempt: claim.run_attempt,
+      execution_instance_id: claim.execution_instance_id
     };
   }
 }
