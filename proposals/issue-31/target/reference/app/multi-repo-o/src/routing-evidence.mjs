@@ -161,6 +161,9 @@ export function executionFailure({
   observedAt,
   retryAt = null
 }) {
+  if (!claimId || !Number.isInteger(claimGeneration) || claimGeneration < 1) {
+    throw new Error("execution failure requires current claim binding");
+  }
   const body = {
     failed_assignment_id: assignment.assignment_id,
     claim_id: claimId,
