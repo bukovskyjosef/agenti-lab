@@ -48,8 +48,7 @@ export function assignmentFromState(state, profile) {
       issue_number: state.work_item.issue_number
     },
     execution_repository: {
-      repository: state.work_item.control_repository,
-      ref: null
+      repository: state.work_item.control_repository
     },
     state: {
       version: a.bound_state_version,
