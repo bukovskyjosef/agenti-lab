@@ -46,7 +46,20 @@ function baseProfile() {
     },
     release_authorization: { required: true, target: "production" },
     publication: { boundary_operations: ["MERGE"] },
-    state_projection: { marker: "agenti-state:v1", single_writer: "O" }
+    state_projection: { marker: "agenti-state:v1", single_writer: "O" },
+    work_item_claims: {
+      mutation_domain: "sqlite-shared-work-item-mutex",
+      recovery: { mode: "PLATFORM_RUN" },
+      material_write_fencing: "REQUIRED"
+    },
+    claim_mechanism_capabilities: {
+      linearizable_per_work_item_mutation_domain: true,
+      all_projection_writers_share_domain: true,
+      authoritative_claim_location: "O_PROJECTION",
+      material_write_fencing: "SHARED_DOMAIN",
+      supports_platform_run_recovery: true,
+      supports_heartbeat_lease: false
+    }
   };
 }
 
@@ -56,7 +69,8 @@ test("runtime config rejects O publication capability", () => {
     projectProfile: profile,
     configuredRepositories: new Set(["acme/control", "acme/a", "acme/b"]),
     installations: { "acme/control": 1, "acme/a": 1, "acme/b": 1 },
-    trustedResultActorIds: new Set([99])
+    trustedResultActorIds: new Set([99]),
+    instanceCount: 1
   };
   assert.deepEqual(validateMultiRepoRuntimeConfig(config, core), []);
   profile.identities.O.permissions.contents = "write";
@@ -94,5 +108,21 @@ test("installation token is restricted to one configured repository and O permis
   await assert.rejects(
     client.installationToken("acme/other", { contents: "read" }),
     /not a configured participant/
+  );
+});
+
+test("multi-instance App rejects local SQLite mutation domain", () => {
+  const profile = baseProfile();
+  const config = {
+    projectProfile: profile,
+    configuredRepositories: new Set(["acme/control", "acme/a", "acme/b"]),
+    installations: { "acme/control": 1, "acme/a": 1, "acme/b": 1 },
+    trustedResultActorIds: new Set([99]),
+    instanceCount: 2
+  };
+  assert.ok(
+    validateMultiRepoRuntimeConfig(config, core).some(
+      (error) => error.includes("multi-instance App")
+    )
   );
 });
