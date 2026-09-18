@@ -3,9 +3,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
-const root = resolve(import.meta.dirname ?? new URL(".", import.meta.url).pathname, "..", "..");
-const child21 = join(root, "issue-21", "target", "reference");
-const child22 = join(root, "issue-22", "target", "reference");
+const issue22Dir = import.meta.dirname ?? new URL(".", import.meta.url).pathname;
+const proposalsRoot = resolve(issue22Dir, "..");
+const child21 = join(proposalsRoot, "issue-21", "target", "reference");
+const child22 = join(proposalsRoot, "issue-22", "target", "reference");
 const temp = await mkdtemp(join(tmpdir(), "agenti-child22-overlay-"));
 const reference = join(temp, "reference");
 
