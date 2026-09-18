@@ -84,18 +84,42 @@ export function evaluate(projectProfile, workflowState, authoritativeSnapshot, w
     if (!snapshot.intake?.accepted || !snapshot.work_item || !snapshot.contract_digest) {
       return { kind: "NO_OP", reason: "NO_MANAGED_INTAKE" };
     }
+
+    const initialState = {
+      work_item: snapshot.work_item,
+      state_version: snapshot.initial_state_version ?? 0,
+      lifecycle: "ANALYSIS",
+      contract: {
+        source_ref: snapshot.contract_source_ref ?? ("issue:" + snapshot.work_item.issue_number),
+        accepted_revision: snapshot.contract_revision ?? issuedAt,
+        digest: snapshot.contract_digest,
+        parent: snapshot.parent_binding ?? null
+      },
+      candidate: { kind: "none", generation: 0, digest: null, members: [] },
+      review: { author_execution_instances: [] }
+    };
+    const transition = transitionById(transitionTable, "T01");
+    const assignment = assignmentFor({
+      state: initialState,
+      snapshot,
+      transition,
+      projectProfile,
+      issuedAt
+    });
+
     return {
       kind: "TRANSITION",
       transition_id: "T01",
-      name: transitionById(transitionTable, "T01").name,
+      name: transition.name,
       from_state_version: null,
       idempotence_key: makeIdempotenceKey(snapshot.work_item, "T01", snapshot.contract_digest),
       initialize: {
         lifecycle: "ANALYSIS",
         work_item: snapshot.work_item,
-        contract_digest: snapshot.contract_digest
+        contract: initialState.contract,
+        state_version: initialState.state_version
       },
-      assignment_spec: { role: "A", purpose: "SHAPE_INTENT" }
+      assignment
     };
   }
 
