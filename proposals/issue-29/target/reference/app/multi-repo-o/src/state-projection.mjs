@@ -434,7 +434,7 @@ export function projectAdapterState({ core, state, action, snapshot, profile, oR
     };
   }
 
-  if (["T03", "T07"].includes(action.transition_id) && action.human_request) {
+  if (action.human_request) {
     const request = normalizeHumanRequest(action.human_request);
     next.human_requests.active = [
       ...next.human_requests.active.filter((item) => item.request_id !== request.request_id),
