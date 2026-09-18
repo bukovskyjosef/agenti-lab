@@ -635,12 +635,22 @@ async function buildSnapshot(github, runtime, state, issue, comments) {
     }
   }
 
-  const stop = latestMatching(hCommands, (command) => command.kind === "stop");
-  if (stop && state.lifecycle !== "STOPPED") {
+  const latestStopOrReopen = [...hCommands].reverse().find(
+    (entry) => entry.command.kind === "stop" || entry.command.kind === "reopen"
+  ) ?? null;
+
+  if (
+    state.lifecycle !== "STOPPED" &&
+    latestStopOrReopen?.command.kind === "stop"
+  ) {
     snapshot.stop_authority = {
       valid: true,
       binding: acceptMutableEvidence({
-        ...humanResponseCurrentObject(stop.comment, stop.command, "STOPPED"),
+        ...humanResponseCurrentObject(
+          latestStopOrReopen.comment,
+          latestStopOrReopen.command,
+          "STOPPED"
+        ),
         context_binding: digest({
           work_item: state.work_item,
           state_version: state.state_version
@@ -649,21 +659,25 @@ async function buildSnapshot(github, runtime, state, issue, comments) {
     };
   }
 
-  if (state.lifecycle === "STOPPED") {
-    const reopen = latestMatching(hCommands, (command) => command.kind === "reopen");
-    if (reopen) {
-      snapshot.reopen_authority = {
-        valid: true,
-        binding: acceptMutableEvidence({
-          ...humanResponseCurrentObject(reopen.comment, reopen.command, "REOPENED"),
-          context_binding: digest({
-            work_item: state.work_item,
-            stop_ref: state.stop.record_ref
-          })
+  if (
+    state.lifecycle === "STOPPED" &&
+    latestStopOrReopen?.command.kind === "reopen"
+  ) {
+    snapshot.reopen_authority = {
+      valid: true,
+      binding: acceptMutableEvidence({
+        ...humanResponseCurrentObject(
+          latestStopOrReopen.comment,
+          latestStopOrReopen.command,
+          "REOPENED"
+        ),
+        context_binding: digest({
+          work_item: state.work_item,
+          stop_ref: state.stop.record_ref
         })
-      };
-      snapshot.earliest_lifecycle = "ANALYSIS";
-    }
+      })
+    };
+    snapshot.earliest_lifecycle = "ANALYSIS";
   }
 
   if (state.publication.status === "SUCCEEDED" && !state.assignment) {
