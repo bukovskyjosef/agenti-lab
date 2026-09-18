@@ -58,6 +58,7 @@ function assignmentEnvelopeFromState(state, profile, observedAt) {
       }))
     ],
     capability_profile: a.capability_profile,
+    claim: { required: true },
     independence: {
       required: a.role === "R",
       must_differ_from_execution_instances: a.must_differ_from_execution_instances ?? [],
@@ -164,7 +165,82 @@ function claimedState({
   core,
   oRunId
 }) {
-  const next = structuredClone(state);
+  let next = structuredClone(state);
+  let grant = null;
+  const active = next.claim_control?.active_claim ?? null;
+
+  if (active) {
+    const verified = core.verifyActiveClaim({
+      state: next,
+      assignmentId: assignment.assignment_id,
+      claimId: active.claim_id,
+      claimGeneration: active.claim_generation,
+      executionInstanceId
+    });
+    if (!verified.valid) {
+      return { valid: false, reason: verified.reason, state };
+    }
+    grant = {
+      claim_id: active.claim_id,
+      claim_generation: active.claim_generation,
+      claim_version: next.claim_control.claim_version
+    };
+  } else {
+    const request = {
+      schema_version: 1,
+      work_item: assignment.work_item,
+      assignment_id: assignment.assignment_id,
+      role: assignment.role,
+      purpose: assignment.purpose,
+      expected: {
+        workflow_state_version: next.state_version,
+        claim_version: next.claim_control?.claim_version ?? 0,
+        assignment_freshness_fingerprint: assignment.state.fingerprint,
+        semantic_work_digest: assignment.semantic_work_digest ?? null,
+        candidate_digest: next.candidate?.digest ?? null,
+        active_claim: "ABSENT"
+      },
+      claimant: {
+        execution_attestation: {
+          adapter_id: assignment.execution_route?.adapter_id ?? "github-workflow",
+          adapter_version: assignment.execution_route?.adapter_version ?? "1",
+          execution_instance_id: executionInstanceId,
+          platform_run: {
+            provider: "github-actions",
+            run_id: runId,
+            run_attempt: runAttempt,
+            job_or_worker_id: null
+          },
+          provider_session: {
+            mode: "fresh",
+            provider_session_id: null
+          },
+          issued_for_assignment: assignment.assignment_id,
+          attested_by: "deterministic-wrapper"
+        }
+      },
+      lease: { mode: "PLATFORM_RUN" },
+      requested_at: new Date().toISOString(),
+      request_id:
+        "app-claim-" +
+        core.digest({
+          assignment_id: assignment.assignment_id,
+          run_id: runId,
+          run_attempt: runAttempt
+        }).slice(7, 31)
+    };
+    const acquired = core.acquireClaimCAS({
+      state: next,
+      request,
+      acquiredAt: request.requested_at
+    });
+    if (!acquired.acquired) {
+      return { valid: false, reason: acquired.reason, state };
+    }
+    next = acquired.state;
+    grant = acquired.grant;
+  }
+
   next.assignment = {
     ...next.assignment,
     dispatch_status: status,
@@ -177,6 +253,8 @@ function claimedState({
       fingerprint: assignment.state.fingerprint,
       assignment_id: assignment.assignment_id,
       execution_instance_id: executionInstanceId,
+      claim_id: grant.claim_id,
+      claim_generation: grant.claim_generation,
       ...(assignment.semantic_work_digest
         ? {
             role: assignment.role,
@@ -194,16 +272,18 @@ function claimedState({
       "agenti-run-claim:" +
       core.digest({
         assignment_id: assignment.assignment_id,
+        claim_id: grant.claim_id,
+        claim_generation: grant.claim_generation,
         run_id: runId,
         run_attempt: runAttempt,
         status
       }).slice(7, 39)
   };
-  return next;
+  return { valid: true, state: next, grant };
 }
 
 function receiverClaimLeaseKey(workItem) {
-  return `receiver-claim:${workItemKey(workItem)}`;
+  return workItemKey(workItem);
 }
 
 function receiverClaimLeaseOwner({
@@ -423,7 +503,7 @@ export class MultiRepoOrchestrator {
       };
     }
 
-    const nextState = claimedState({
+    const claimed = claimedState({
       state: reconstructed.state,
       assignment,
       runId: verified.run_id,
@@ -434,6 +514,8 @@ export class MultiRepoOrchestrator {
       oRunId:
         `run-claim:${assignment.assignment_id}:${verified.run_id}:${verified.run_attempt}`
     });
+    if (!claimed.valid) return claimed;
+    const nextState = claimed.state;
 
     try {
       const stateComment = await writeStateCas({
@@ -449,6 +531,7 @@ export class MultiRepoOrchestrator {
         ...verified,
         state: nextState,
         stateComment,
+        claim_grant: claimed.grant,
         already_claimed: currentOwner === verified.run_id
       };
     } catch (error) {
@@ -906,7 +989,12 @@ export class MultiRepoOrchestrator {
             candidate_digest: claim.state.candidate.digest,
             workflow_run_id: claim.run_id,
             run_attempt: claim.run_attempt,
-            execution_instance_id: claim.execution_instance_id
+            execution_instance_id: claim.execution_instance_id,
+            claim_id: claim.claim_grant?.claim_id ??
+              claim.state.claim_control?.active_claim?.claim_id,
+            claim_generation: claim.claim_grant?.claim_generation ??
+              claim.state.claim_control?.active_claim?.claim_generation,
+            claim_version: claim.state.claim_control?.claim_version
           };
         } finally {
           this.store.releaseWorkLease(claimKey, claimOwner);
