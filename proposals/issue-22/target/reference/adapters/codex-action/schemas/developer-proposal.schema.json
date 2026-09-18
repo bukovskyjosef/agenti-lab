@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["role", "status", "result_type", "payload"],
+  "properties": {
+    "role": { "const": "D" },
+    "status": { "enum": ["COMPLETED", "BLOCKED", "FAILED"] },
+    "result_type": { "const": "DEVELOPER" },
+    "evidence_refs": { "type": "array", "maxItems": 20 },
+    "human_request": { "type": ["object", "null"] },
+    "retry_or_failure": { "type": ["object", "null"] },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["work_contract_digest", "base", "requested_branch_key", "author_validation", "blockers"],
+      "properties": {
+        "work_contract_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "base": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "ref_or_sha"],
+          "properties": {
+            "repository": { "type": "string", "minLength": 3 },
+            "ref_or_sha": { "type": "string", "minLength": 1 }
+          }
+        },
+        "requested_branch_key": { "type": "string", "pattern": "^[A-Za-z0-9._/-]{1,120}$" },
+        "author_validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["summary"],
+          "properties": {
+            "summary": { "type": "string", "maxLength": 4000 }
+          }
+        },
+        "blockers": { "type": "array", "maxItems": 20 }
+      }
+    }
+  }
+}

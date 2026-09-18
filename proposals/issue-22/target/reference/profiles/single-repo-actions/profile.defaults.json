@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "profile_id": "single-repo-actions",
+  "core_dependency": {
+    "lab_repository": "bukovskyjosef/agenti-lab",
+    "issue": 21,
+    "pull_request": 25,
+    "exact_head": "7b155f8abd09f84c0065d64063eee3b2c3dce615"
+  },
+  "runtime": {
+    "state_marker": "agenti-state:v1",
+    "assignment_marker": "agenti-assignment:v1",
+    "role_result_marker": "agenti-role-result:v1",
+    "human_request_marker": "agenti-human-request:v1",
+    "release_request_marker": "agenti-release-request:v1",
+    "run_claim_prefix": "agenti-run-claim:",
+    "reconcile_cron": "*/15 * * * *"
+  },
+  "runner": {
+    "adapter": "codex-action",
+    "codex_action_ref": "86365089eb2b84e0a8fb0717b304f8bdcb13b20e",
+    "secret_name": "OPENAI_API_KEY"
+  },
+  "labels": [
+    "agenti:managed",
+    "agenti:waiting-human",
+    "agenti:release-approval",
+    "agenti:blocked",
+    "agenti:stopped",
+    "agenti:done"
+  ],
+  "workflows": {
+    "orchestrate": "agenti-orchestrate.yml",
+    "reconcile": "agenti-reconcile.yml",
+    "A": "agenti-role-a.yml",
+    "D": "agenti-role-d.yml",
+    "R": "agenti-role-r.yml",
+    "P": "agenti-publish.yml"
+  }
+}

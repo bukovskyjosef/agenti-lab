@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "adapter_id": "codex-action",
+  "adapter_version": "1",
+  "source": {
+    "repository": "openai/codex-action",
+    "exact_ref": "86365089eb2b84e0a8fb0717b304f8bdcb13b20e"
+  },
+  "roles": {
+    "A": {
+      "permission_profile": ":read-only",
+      "proposal_schema": "schemas/analyst-proposal.schema.json",
+      "fresh_execution_required": false
+    },
+    "D": {
+      "permission_profile": ":workspace",
+      "proposal_schema": "schemas/developer-proposal.schema.json",
+      "fresh_execution_required": false
+    },
+    "R": {
+      "permission_profile": ":read-only",
+      "proposal_schema": "schemas/reviewer-proposal.schema.json",
+      "fresh_execution_required": true,
+      "resume_forbidden": true
+    }
+  }
+}

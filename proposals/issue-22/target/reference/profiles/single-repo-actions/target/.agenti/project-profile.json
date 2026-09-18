@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "runtime_version": "1",
+  "repository_topology": "single-repo",
+  "control_repository": "__OWNER__/__REPOSITORY__",
+  "human": {
+    "principals": [
+      {
+        "actor_id": 1,
+        "login": "__HUMAN_LOGIN__"
+      }
+    ]
+  },
+  "semantic_authority_map": [
+    {
+      "fact_domain": "product-contract",
+      "source_ref": "managed-issue-body",
+      "currentness": "current"
+    }
+  ],
+  "required_checks": [],
+  "role_runners": {
+    "A": {
+      "adapter_id": "codex-action",
+      "adapter_version": "1",
+      "capability_profile": "A_READ_ANALYZE"
+    },
+    "D": {
+      "adapter_id": "codex-action",
+      "adapter_version": "1",
+      "capability_profile": "D_WORKSPACE_WRITE"
+    },
+    "R": {
+      "adapter_id": "codex-action",
+      "adapter_version": "1",
+      "capability_profile": "R_READ_REVIEW",
+      "independence_mechanism": "codex-fresh-actions-run"
+    },
+    "P": {
+      "adapter_id": "deterministic-actions-publisher",
+      "adapter_version": "1",
+      "capability_profile": "P_PUBLISH"
+    }
+  },
+  "independent_r_enforcement": {
+    "mechanisms": {
+      "codex-fresh-actions-run": {
+        "attestation_source": "deterministic-wrapper",
+        "fresh_execution_required": true,
+        "trusted_platform_fields": [
+          "run_id",
+          "run_attempt"
+        ]
+      }
+    }
+  },
+  "identities": {
+    "O": {
+      "identity_id": "github-actions-o",
+      "capability_profile": "O_CONTROL_PLANE",
+      "dispatch_mechanism": "workflow_dispatch",
+      "permissions": {
+        "metadata": "read",
+        "contents": "read",
+        "issues": "write",
+        "pull_requests": "read",
+        "checks": "read",
+        "actions": "write",
+        "deployments": "read"
+      }
+    },
+    "P": {
+      "identity_id": "github-actions-p",
+      "capability_profile": "P_PUBLISH",
+      "dispatch_mechanism": "none",
+      "permissions": {
+        "metadata": "read",
+        "contents": "write",
+        "issues": "write",
+        "pull_requests": "write",
+        "checks": "read",
+        "actions": "write",
+        "deployments": "write"
+      }
+    }
+  },
+  "release_authorization": {
+    "required": true,
+    "target": "default-branch"
+  },
+  "publication": {
+    "boundary_operations": [
+      "MERGE"
+    ]
+  },
+  "state_projection": {
+    "marker": "agenti-state:v1",
+    "single_writer": "O"
+  }
+}
