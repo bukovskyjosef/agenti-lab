@@ -174,6 +174,26 @@ function claimedState({
   return next;
 }
 
+function receiverClaimLeaseKey(workItem) {
+  return `receiver-claim:${workItemKey(workItem)}`;
+}
+
+function receiverClaimLeaseOwner({
+  assignmentId,
+  runnerRepository,
+  workflowRunId,
+  workflowRunAttempt,
+  source
+}) {
+  return [
+    source,
+    assignmentId,
+    runnerRepository,
+    normalizedRunId(workflowRunId) ?? "unknown-run",
+    normalizedRunAttempt(workflowRunAttempt) ?? "unknown-attempt"
+  ].join(":");
+}
+
 export class MultiRepoOrchestrator {
   constructor({
     gh,
@@ -389,28 +409,51 @@ export class MultiRepoOrchestrator {
       };
     }
 
-    const claim = await this.bindAssignmentRun({
-      reconstructed,
-      assignment,
+    const claimKey = receiverClaimLeaseKey(state.work_item);
+    const claimOwner = receiverClaimLeaseOwner({
+      assignmentId: assignment.assignment_id,
       runnerRepository: dispatched.target.repository,
       workflowRunId: dispatched.workflow_run_id,
       workflowRunAttempt: dispatched.run_attempt ?? 1,
-      status: "dispatched"
+      source: "dispatch"
     });
+    const claimLeaseMs = 30000;
 
-    if (!claim.valid) {
-      throw new Error(`DURABLE_RUN_CLAIM_FAILED:${claim.reason}`);
+    if (!this.store.acquireWorkLease({
+      workKey: claimKey,
+      owner: claimOwner,
+      leaseMs: claimLeaseMs
+    })) {
+      throw new Error("DURABLE_RUN_CLAIM_BUSY");
     }
 
-    return {
-      state: claim.state,
-      stateComment: claim.stateComment,
-      dispatched: {
-        ...dispatched,
-        durable_claim: true,
-        execution_instance_id: claim.execution_instance_id
+    try {
+      const fresh = await this.reconstruct(state.work_item);
+      const claim = await this.bindAssignmentRun({
+        reconstructed: fresh,
+        assignment,
+        runnerRepository: dispatched.target.repository,
+        workflowRunId: dispatched.workflow_run_id,
+        workflowRunAttempt: dispatched.run_attempt ?? 1,
+        status: "dispatched"
+      });
+
+      if (!claim.valid) {
+        throw new Error(`DURABLE_RUN_CLAIM_FAILED:${claim.reason}`);
       }
-    };
+
+      return {
+        state: claim.state,
+        stateComment: claim.stateComment,
+        dispatched: {
+          ...dispatched,
+          durable_claim: true,
+          execution_instance_id: claim.execution_instance_id
+        }
+      };
+    } finally {
+      this.store.releaseWorkLease(claimKey, claimOwner);
+    }
   }
 
   async processWorkItem(workItem, observedAt = new Date().toISOString()) {
@@ -542,64 +585,92 @@ export class MultiRepoOrchestrator {
       return { valid: false, reason: "RUNNER_REPOSITORY_MISMATCH" };
     }
 
-    const reconstructed = await this.reconstruct(workItem);
-    if (!assignmentMatchesState(
-      assignment,
-      reconstructed.state,
-      this.profile,
-      this.core
-    )) {
-      return { valid: false, reason: "ASSIGNMENT_NOT_CURRENT" };
-    }
-    if (reconstructed.snapshot.role_result) {
-      return { valid: false, reason: "CURRENT_RESULT_ALREADY_EXISTS" };
-    }
-
-    const action = this.core.evaluate(
-      this.profile,
-      reconstructed.state,
-      reconstructed.snapshot,
-      { observed_at: new Date().toISOString() },
-      this.transitionTable
-    );
-    if (
-      action.kind !== "NO_OP" ||
-      action.reason !== "NO_AUTHORIZED_TRANSITION"
-    ) {
-      return {
-        valid: false,
-        reason: "AUTHORITY_CHANGED_BEFORE_ROLE_START",
-        current_action: action.kind,
-        transition_id: action.transition_id ?? null
-      };
-    }
-
-    const claim = await this.bindAssignmentRun({
-      reconstructed,
-      assignment,
+    const claimKey = receiverClaimLeaseKey(workItem);
+    const claimOwner = receiverClaimLeaseOwner({
+      assignmentId: assignment.assignment_id,
       runnerRepository,
       workflowRunId,
       workflowRunAttempt,
-      status: "running"
+      source: "receiver"
     });
-    if (!claim.valid) {
+    const claimLeaseMs = 30000;
+
+    if (!this.store.acquireWorkLease({
+      workKey: claimKey,
+      owner: claimOwner,
+      leaseMs: claimLeaseMs
+    })) {
       return {
         valid: false,
-        reason: claim.reason,
-        workflow_run_id: claim.workflow_run_id ?? null
+        reason: "ASSIGNMENT_RUN_CLAIM_CONFLICT",
+        workflow_run_id: null
       };
     }
 
-    return {
-      valid: true,
-      reason: claim.already_claimed
-        ? "CURRENT_EXPLICIT_ASSIGNMENT_RUN_CONFIRMED"
-        : "CURRENT_EXPLICIT_ASSIGNMENT_RUN_CLAIMED",
-      state_version: claim.state.state_version,
-      candidate_digest: claim.state.candidate.digest,
-      workflow_run_id: claim.run_id,
-      run_attempt: claim.run_attempt,
-      execution_instance_id: claim.execution_instance_id
-    };
-  }
-}
+    try {
+      // The receiver claim critical section intentionally begins before the
+      // fresh authority reconstruction and ends only after the durable
+      // GitHub claim/grant decision is complete.
+      const reconstructed = await this.reconstruct(workItem);
+      if (!assignmentMatchesState(
+        assignment,
+        reconstructed.state,
+        this.profile,
+        this.core
+      )) {
+        return { valid: false, reason: "ASSIGNMENT_NOT_CURRENT" };
+      }
+      if (reconstructed.snapshot.role_result) {
+        return { valid: false, reason: "CURRENT_RESULT_ALREADY_EXISTS" };
+      }
+
+      const action = this.core.evaluate(
+        this.profile,
+        reconstructed.state,
+        reconstructed.snapshot,
+        { observed_at: new Date().toISOString() },
+        this.transitionTable
+      );
+      if (
+        action.kind !== "NO_OP" ||
+        action.reason !== "NO_AUTHORIZED_TRANSITION"
+      ) {
+        return {
+          valid: false,
+          reason: "AUTHORITY_CHANGED_BEFORE_ROLE_START",
+          current_action: action.kind,
+          transition_id: action.transition_id ?? null
+        };
+      }
+
+      const claim = await this.bindAssignmentRun({
+        reconstructed,
+        assignment,
+        runnerRepository,
+        workflowRunId,
+        workflowRunAttempt,
+        status: "running"
+      });
+      if (!claim.valid) {
+        return {
+          valid: false,
+          reason: claim.reason,
+          workflow_run_id: claim.workflow_run_id ?? null
+        };
+      }
+
+      return {
+        valid: true,
+        reason: claim.already_claimed
+          ? "CURRENT_EXPLICIT_ASSIGNMENT_RUN_CONFIRMED"
+          : "CURRENT_EXPLICIT_ASSIGNMENT_RUN_CLAIMED",
+        state_version: claim.state.state_version,
+        candidate_digest: claim.state.candidate.digest,
+        workflow_run_id: claim.run_id,
+        run_attempt: claim.run_attempt,
+        execution_instance_id: claim.execution_instance_id
+      };
+    } finally {
+      this.store.releaseWorkLease(claimKey, claimOwner);
+    }
+  }}
