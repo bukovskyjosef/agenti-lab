@@ -139,7 +139,7 @@ Multi-repo binding musí zajistit, že:
 - autoritativní work item drží reverse links na všechny participating implementation PRs/change proposals,
 - přesná reviewed candidate identity každého participating repository je durable dohledatelná,
 - O od okamžiku multi-repo product-level aggregation mechanicky vlastní/current CAS-updatuje composite candidate binding v control repository ještě před product-level approval/release authorization,
-- product-level integration/release state je rekonstruovatelný z control repository bez kopírování repository-local technické evidence,
+- product-level publication/release state je rekonstruovatelný z control repository bez kopírování repository-local technické evidence,
 - změna implementation repository nebo jeho candidate identity invaliduje/re-evaluuje předchozí composite candidate podle pravidel `delivery-cycle.md`.
 
 Pokud některá nutná volba není z projektu zřejmá, nevymýšlej ji — vytvoř Human decision gate.
@@ -177,7 +177,7 @@ V `multi-repo` patří product-level governance, Project Profile a autoritativn�
 Má být krátký router, ne druhá specifikace. Musí agentovi říct:
 
 1. přečti autoritativní work item,
-2. ověř, že máš právě jednu explicitně aktivní canonical role z Human/durable orchestration assignmentu; roli si neodvozuj a sám ji neměň,
+2. ověř, že máš právě jednu explicitně aktivní canonical H/A/D/R/P role z H nebo durable O assignmentu; roli si neodvozuj a sám ji neměň,
 3. načti relevantní canonical docs podle semantic authority mapy a respektuj jejich fact-domain-scoped authority/currentness,
 4. ověř lifecycle/terminal state/Ready/dependencies/concurrency,
 5. pokud je pro aktuální contract/gate materiální effective runtime/platform fact, použij jeho declared effective-state source/evidence nebo zaznamenej unverified boundary,
@@ -296,4 +296,4 @@ Pokud v libovolné fázi vznikne blocking Human Input Request, musí fresh insta
 
 U `multi-repo` musí navíc agent spuštěný v libovolném participating repository bez domýšlení zjistit, který repository je control plane, kde leží autoritativní work item a Human decisions/responses, které implementation repositories jsou v daném work itemu zapojené, jaké PRs/change candidates tvoří aktuální product-level candidate a že O vlastní current composite binding.
 
-Pokročilý test: běžný work item projde od Human intake přes Analysis, D, Review a release až do produkce bez ručního přeposílání agentních reportů člověkem; Human vstupuje pouze tam, kde je skutečně potřeba Human input, intentional termination/reopen authority nebo configured release authorization. Po Human response dokáže workflow pokračovat deterministicky z durable state i v nové agentní session.
+Pokročilý test: běžný work item projde od H intake přes A → D → R → optional H release authorization → P → O Done bez ručního přeposílání agentních reportů člověkem; H vstupuje pouze tam, kde je skutečně potřeba H-owned input, intentional termination/reopen authority nebo configured release authorization. Po durable H response dokáže O workflow deterministicky obnovit i v nové agentní session.
