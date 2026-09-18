@@ -31,6 +31,7 @@ export function loadRuntimeConfig(env = process.env) {
     dbPath: env.AGENTI_DB_PATH ?? "/data/agenti-o.sqlite",
     port: Number(env.AGENTI_PORT ?? 8080),
     workerId: env.AGENTI_WORKER_ID ?? "multi-repo-o-1",
+    instanceCount: Number(env.AGENTI_INSTANCE_COUNT ?? 1),
     leaseMs: Number(env.AGENTI_LEASE_MS ?? 30000),
     reconcileIntervalMs: Number(env.AGENTI_RECONCILE_INTERVAL_MS ?? 60000),
     publicBaseUrl: env.AGENTI_PUBLIC_BASE_URL ?? null,
@@ -46,6 +47,25 @@ export function validateMultiRepoRuntimeConfig(config, core) {
     errors.push(
       ...core.validateRoutingConfiguration(config.projectProfile)
         .map((error) => "execution-routing semantics: " + error)
+    );
+  }
+  if (core.validateClaimsConfiguration) {
+    errors.push(
+      ...core.validateClaimsConfiguration(config.projectProfile)
+        .map((error) => "claim/fencing semantics: " + error)
+    );
+  }
+  if (!Number.isInteger(config.instanceCount ?? 1) || (config.instanceCount ?? 1) < 1) {
+    errors.push("AGENTI_INSTANCE_COUNT must be an integer >= 1");
+  }
+  if (
+    (config.instanceCount ?? 1) > 1 &&
+    String(config.projectProfile.work_item_claims?.mutation_domain ?? "")
+      .toLowerCase()
+      .includes("sqlite")
+  ) {
+    errors.push(
+      "multi-instance App cannot use a local SQLite work-item mutation domain"
     );
   }
   if (config.projectProfile.repository_topology !== "multi-repo") errors.push("multi-repo-o requires repository_topology=multi-repo");
