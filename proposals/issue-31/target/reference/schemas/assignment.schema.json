@@ -200,6 +200,12 @@
       "properties": {
         "required": {
           "const": true
+        },
+        "target_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "target_binding": {
+          "type": "object"
         }
       }
     }
