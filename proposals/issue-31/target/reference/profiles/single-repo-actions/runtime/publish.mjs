@@ -140,7 +140,8 @@ export async function publishCurrent({ issueNumber, assignmentId, contextPath = 
     runtime,
     state,
     assignment,
-    comments: loaded.comments
+    comments: loaded.comments,
+    checkRouting: false
   });
   if (!writerCurrent.current) {
     throw new Error("P_WRITE_CURRENTNESS_FAILED: " + writerCurrent.reason);
