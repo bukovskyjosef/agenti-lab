@@ -162,6 +162,63 @@ const server = createServer(async (request, response) => {
       return json(response, result.valid ? 200 : 409, result);
     }
 
+    if (request.method === "POST" && url.pathname === "/material/prepare") {
+      const auth = request.headers.authorization ?? "";
+      const presented = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+      if (!safeSecretEqual(presented, config.receiverVerifySecret)) {
+        return json(response, 401, { valid: false, reason: "UNAUTHORIZED_RECEIVER" });
+      }
+      const rawBody = await readRawBody(request, 512 * 1024);
+      const payload = JSON.parse(rawBody.toString("utf8"));
+      const runnerRepository =
+        request.headers["x-agenti-runner-repository"] ?? "";
+      const workflowRunId =
+        request.headers["x-agenti-workflow-run-id"] ?? "";
+      const workflowRunAttempt =
+        request.headers["x-agenti-workflow-run-attempt"] ?? "";
+
+      const result = await orchestrator.prepareMaterialWrite({
+        assignment: payload.assignment,
+        runnerRepository,
+        workflowRunId,
+        workflowRunAttempt,
+        claimId: payload.claim_id,
+        claimGeneration: Number(payload.claim_generation),
+        operationKind: payload.operation_kind,
+        targetBinding: payload.target_binding
+      });
+      return json(response, result.valid ? 200 : 409, result);
+    }
+
+    if (request.method === "POST" && url.pathname === "/material/resolve") {
+      const auth = request.headers.authorization ?? "";
+      const presented = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+      if (!safeSecretEqual(presented, config.receiverVerifySecret)) {
+        return json(response, 401, { valid: false, reason: "UNAUTHORIZED_RECEIVER" });
+      }
+      const rawBody = await readRawBody(request, 512 * 1024);
+      const payload = JSON.parse(rawBody.toString("utf8"));
+      const runnerRepository =
+        request.headers["x-agenti-runner-repository"] ?? "";
+      const workflowRunId =
+        request.headers["x-agenti-workflow-run-id"] ?? "";
+      const workflowRunAttempt =
+        request.headers["x-agenti-workflow-run-attempt"] ?? "";
+
+      const result = await orchestrator.resolveMaterialWrite({
+        assignment: payload.assignment,
+        runnerRepository,
+        workflowRunId,
+        workflowRunAttempt,
+        claimId: payload.claim_id,
+        claimGeneration: Number(payload.claim_generation),
+        materialOperationId: payload.material_operation_id,
+        outcome: payload.outcome,
+        evidenceRef: payload.evidence_ref ?? null
+      });
+      return json(response, result.valid ? 200 : 409, result);
+    }
+
     if (request.method === "POST" && url.pathname === "/execution/failure") {
       const auth = request.headers.authorization ?? "";
       const presented = auth.startsWith("Bearer ") ? auth.slice(7) : "";
