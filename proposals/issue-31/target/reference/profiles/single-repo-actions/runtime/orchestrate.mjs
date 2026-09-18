@@ -1051,21 +1051,29 @@ export async function processIssue(issueNumber) {
     const issue = await github.getIssue(issueNumber);
     const loaded = await loadState(github, issueNumber, runtime.workflowStateSchema);
 
-    const materialRecovery =
-      await reconcileMaterialOperationForFailedRun({
-        github,
-        runtime,
-        loaded,
-        issueNumber
-      });
-    if (materialRecovery?.blocked) {
-      return {
-        status: materialRecovery.status,
-        material_operation: materialRecovery.material_operation
-      };
-    }
-    if (materialRecovery?.changed) {
-      continue;
+    const currentRoleComment = loaded.state?.assignment
+      ? findRoleResult(
+          loaded.comments,
+          loaded.state.assignment.assignment_id
+        )
+      : null;
+    if (!currentRoleComment) {
+      const materialRecovery =
+        await reconcileMaterialOperationForFailedRun({
+          github,
+          runtime,
+          loaded,
+          issueNumber
+        });
+      if (materialRecovery?.blocked) {
+        return {
+          status: materialRecovery.status,
+          material_operation: materialRecovery.material_operation
+        };
+      }
+      if (materialRecovery?.changed) {
+        continue;
+      }
     }
 
     const recovery = await recoverActiveClaimIfAuthorized({
