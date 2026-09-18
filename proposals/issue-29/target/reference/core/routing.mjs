@@ -380,7 +380,15 @@ export function selectRunnerCandidate({
     attempted.push(candidateAttempt(candidateId, capacity.status, capacity));
 
     if (capacity.status === "UNAVAILABLE") continue;
-    if (["TEMPORARILY_EXHAUSTED", "RATE_LIMITED"].includes(capacity.status)) continue;
+    if (["TEMPORARILY_EXHAUSTED", "RATE_LIMITED"].includes(capacity.status)) {
+      if (
+        policy.wait_policy?.on_included_exhausted === "WAIT" &&
+        !policy.wait_policy?.try_next_included_before_wait
+      ) {
+        break;
+      }
+      continue;
+    }
 
     if (
       capacity.status === "UNKNOWN" &&
