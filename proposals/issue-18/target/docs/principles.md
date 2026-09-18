@@ -143,7 +143,7 @@ Standard nepředepisuje pevnou taxonomy názvů, directory tree, lokální autho
 
 Agent načítá minimum **úplného** kontextu potřebného pro aktivní roli a úkol. Tokenová úspora nesmí znamenat vynechání relevantního kontraktu; zároveň se do tasků nekopíruje celý repozitář.
 
-Nový drahý role run se nespouští jen proto, že dorazil event. Pokud relevantní semantic work state od posledního applicable completed run zůstává materiálně stejný a neexistuje jiný objektivně platný progress reason, orchestrace run potlačí podle `automation.md`.
+Nový drahý role run se nespouští jen proto, že dorazil event. Pokud relevantní semantic work state od posledního applicable completed run zůstává materiálně stejný a neexistuje jiný objektivně platný progress reason, O run potlačí podle `automation.md`.
 
 ## 9. Automatizace nerozšiřuje autoritu
 
