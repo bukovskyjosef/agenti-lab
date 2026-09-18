@@ -1007,6 +1007,116 @@ export class MultiRepoOrchestrator {
     };
   }
 
+  async validateMaterialTarget({
+    reconstructed,
+    assignment,
+    operationKind,
+    targetBinding,
+    observedAt
+  }) {
+    const action = this.core.evaluate(
+      this.profile,
+      reconstructed.state,
+      reconstructed.snapshot,
+      { observed_at: observedAt },
+      this.transitionTable
+    );
+    if (
+      action.kind !== "NO_OP" ||
+      action.reason !== "NO_AUTHORIZED_TRANSITION"
+    ) {
+      return {
+        valid: false,
+        reason: "AUTHORITY_CHANGED_BEFORE_MATERIAL_WRITE",
+        current_action: action.kind,
+        transition_id: action.transition_id ?? null
+      };
+    }
+
+    const state = reconstructed.state;
+    if (operationKind === "A_CONTRACT_MUTATION") {
+      if (
+        targetBinding.repository !== this.profile.control_repository ||
+        Number(targetBinding.issue_number) !==
+          Number(state.work_item.issue_number) ||
+        targetBinding.expected_contract_digest !== state.contract.digest
+      ) {
+        return { valid: false, reason: "A_CONTRACT_TARGET_NOT_CURRENT" };
+      }
+      return { valid: true };
+    }
+
+    if (operationKind === "D_CANDIDATE_REF_WRITE") {
+      if (!targetBinding.base_ref || !targetBinding.expected_base_sha) {
+        return { valid: false, reason: "D_IMMUTABLE_BASE_REQUIRED" };
+      }
+      if (state.candidate?.kind === "single") {
+        if (
+          targetBinding.expected_base_sha !==
+          state.candidate.members?.[0]?.head_sha
+        ) {
+          return { valid: false, reason: "D_CANDIDATE_BASE_NOT_CURRENT" };
+        }
+      } else {
+        const branch = await this.gh.getBranch(
+          targetBinding.repository,
+          targetBinding.base_ref
+        );
+        if (branch.commit?.sha !== targetBinding.expected_base_sha) {
+          return { valid: false, reason: "D_DEFAULT_BASE_NOT_CURRENT" };
+        }
+      }
+      return { valid: true };
+    }
+
+    if (operationKind === "R_REVIEW_EVIDENCE_WRITE") {
+      if (
+        !state.candidate?.digest ||
+        targetBinding.candidate_digest !== state.candidate.digest
+      ) {
+        return { valid: false, reason: "R_CANDIDATE_TARGET_NOT_CURRENT" };
+      }
+      return { valid: true };
+    }
+
+    if (operationKind === "P_MERGE") {
+      if (
+        !state.candidate?.digest ||
+        targetBinding.candidate_digest !== state.candidate.digest ||
+        !targetBinding.repository ||
+        !Number.isInteger(Number(targetBinding.pr_number)) ||
+        !targetBinding.expected_head ||
+        !targetBinding.target_branch
+      ) {
+        return { valid: false, reason: "P_EXACT_TARGET_REQUIRED" };
+      }
+      const member = (state.candidate.members ?? []).find(
+        (item) =>
+          item.repository === targetBinding.repository &&
+          Number(item.pr_number) === Number(targetBinding.pr_number)
+      );
+      if (
+        !member ||
+        member.head_sha !== targetBinding.expected_head
+      ) {
+        return { valid: false, reason: "P_CANDIDATE_TARGET_NOT_CURRENT" };
+      }
+      const pull = await this.gh.getPullRequest(
+        targetBinding.repository,
+        Number(targetBinding.pr_number)
+      );
+      if (
+        pull.head?.sha !== targetBinding.expected_head ||
+        pull.base?.ref !== targetBinding.target_branch
+      ) {
+        return { valid: false, reason: "P_PULL_TARGET_NOT_CURRENT" };
+      }
+      return { valid: true };
+    }
+
+    return { valid: false, reason: "MATERIAL_OPERATION_NOT_ALLOWLISTED" };
+  }
+
   async prepareMaterialWrite({
     assignment,
     runnerRepository,
@@ -1102,6 +1212,15 @@ export class MultiRepoOrchestrator {
         if (!claimCheck.valid) {
           return { valid: false, reason: claimCheck.reason };
         }
+
+        const targetCheck = await this.validateMaterialTarget({
+          reconstructed,
+          assignment,
+          operationKind,
+          targetBinding,
+          observedAt: preparedAt
+        });
+        if (!targetCheck.valid) return targetCheck;
 
         const prepared = this.core.prepareMaterialOperation({
           state: reconstructed.state,
