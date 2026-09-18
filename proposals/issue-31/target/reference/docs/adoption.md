@@ -15,6 +15,6 @@ Doctor/config validation must fail closed when:
 - material writes can bypass the shared/native fence;
 - recovery mode is unsupported;
 - multi-repo mutation is keyed by an implementation repo instead of the control work item;
-- a multi-instance App declares the single-node/local SQLite reference mutex.
+- a multi-instance App declares the single-node process-local reference fence.
 
 Operational credentials remain role-scoped. Adopting the claim mechanism must not give O P publication credentials.
