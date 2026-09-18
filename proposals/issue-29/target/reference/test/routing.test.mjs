@@ -701,6 +701,11 @@ test("contract drift while waiting wins over old routing wait and invalidates it
     {
       contract_digest: changedContract,
       contract_revision: "2026-09-18T12:05:00Z",
+      drift: {
+        contract_changed: true,
+        candidate_changed: false,
+        gate_changed: false
+      },
       capacity_observations: [],
       billing_safety_observations: []
     },
