@@ -47,9 +47,13 @@ async function verifyPlatformAttestation({ gh, profile, result }) {
   const target = runnerTarget(profile, result.role);
   const runId = attestation.platform_run.run_id;
   const runAttempt = attestation.platform_run.run_attempt;
-  const run = await gh.getWorkflowRun(target.repository, runId);
+  const [workflow, run] = await Promise.all([
+    gh.getWorkflow(target.repository, target.workflow),
+    gh.getWorkflowRun(target.repository, runId)
+  ]);
   const runRepo = run.repository?.full_name ?? run.head_repository?.full_name;
   if (runRepo !== target.repository) return null;
+  if (Number(run.workflow_id) !== Number(workflow.id)) return null;
   if (Number(run.run_attempt) !== Number(runAttempt)) return null;
   if (run.event !== "workflow_dispatch") return null;
   const expectedExecutionId = `github-actions:${target.repository}:${runId}:${runAttempt}`;
