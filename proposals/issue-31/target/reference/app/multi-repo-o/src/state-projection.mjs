@@ -494,6 +494,15 @@ export function projectAdapterState({ core, state, action, snapshot, profile, oR
     }
   }
 
+  if (
+    roleResult &&
+    next.material_operation &&
+    next.material_operation.status !== "PREPARED" &&
+    next.material_operation.status !== "HUMAN_ACTION_REQUIRED"
+  ) {
+    next.material_operation = null;
+  }
+
   if (activeClaim) {
     let terminalReason = null;
     if (roleResult) {
