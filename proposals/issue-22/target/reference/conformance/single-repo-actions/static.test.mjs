@@ -44,7 +44,7 @@ test("A/D/R provider jobs use the reviewed exact Codex Action pin and fake path 
     assert.match(body, new RegExp(exact.replaceAll("/", "\\/")));
     assert.match(body, /vars\.AGENTI_TEST_MODE == 'true'/);
     assert.match(body, /vars\.AGENTI_TEST_MODE != 'true'/);
-    assert.match(body, /secrets\[vars\.AGENTI_CODEX_SECRET_NAME\]/);
+    assert.match(body, /secrets\.OPENAI_API_KEY/);
   }
 });
 
