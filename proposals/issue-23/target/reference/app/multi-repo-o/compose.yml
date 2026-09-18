@@ -1,6 +1,8 @@
 services:
   multi-repo-o:
-    build: .
+    build:
+      context: ../../../../../..
+      dockerfile: proposals/issue-23/target/reference/app/multi-repo-o/Dockerfile
     restart: unless-stopped
     env_file: .env
     ports:
