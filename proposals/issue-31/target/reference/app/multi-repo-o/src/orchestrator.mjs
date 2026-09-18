@@ -1162,6 +1162,16 @@ export class MultiRepoOrchestrator {
       workItem,
       async () => {
         const reconstructed = await this.reconstruct(workItem, observedAt);
+        if (
+          reconstructed.state.material_operation?.status === "PREPARED" ||
+          reconstructed.state.material_operation?.status ===
+            "HUMAN_ACTION_REQUIRED"
+        ) {
+          return {
+            accepted: false,
+            reason: "MATERIAL_OPERATION_RECONCILIATION_REQUIRED"
+          };
+        }
         if (!assignmentMatchesState(
           assignment,
           reconstructed.state,
