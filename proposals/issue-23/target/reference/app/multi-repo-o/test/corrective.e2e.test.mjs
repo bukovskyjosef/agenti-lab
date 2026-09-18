@@ -568,7 +568,12 @@ test("F1 concurrent receiver preflights serialize from the same unclaimed GitHub
   assert.equal(losers.length, 1);
   assert.equal(
     losers[0].reason,
-    "ASSIGNMENT_RUN_CLAIM_CONFLICT"
+    "ASSIGNMENT_RUN_OWNERSHIP_CONFLICT"
+  );
+
+  assert.equal(
+    String(losers[0].workflow_run_id),
+    String(winners[0].workflow_run_id)
   );
 
   const winnerRunId = String(winners[0].workflow_run_id);
