@@ -6,6 +6,7 @@ import * as core from "../../../core/index.mjs";
 import { runnerTarget } from "../src/dispatch.mjs";
 import { enqueueReconcile } from "../src/reconcile.mjs";
 import { MultiRepoOrchestrator } from "../src/orchestrator.mjs";
+import { executionFailure } from "../src/routing-evidence.mjs";
 import { OperationalStore } from "../src/store.mjs";
 
 const profile = JSON.parse(await readFile(
@@ -362,4 +363,31 @@ test("multi-repo reconcile suppresses capacity wait before due and enqueues it a
   assert.equal(due, 1);
   assert.equal(enqueued.length, 1);
   assert.equal(enqueued[0].eventName, "reconcile");
+});
+
+
+test("F2 App failure writer marks accepted UNAVAILABLE as T14-routable", () => {
+  const issue = {
+    number: 42,
+    title: "Unavailable writer",
+    body: "Stable contract",
+    updated_at: OBSERVED,
+    labels: [{ name: "agenti:managed" }]
+  };
+  const built = buildRoutedDState(issue);
+  const assignment = assignmentEnvelope(built.state);
+  const failure = executionFailure({
+    core,
+    assignment,
+    executionInstanceId: "github-actions:acme/service-a:7001:1",
+    status: "UNAVAILABLE",
+    observedAt: OBSERVED
+  });
+  assert.equal(failure.capacity_status, "UNAVAILABLE");
+  assert.equal(failure.transient, true);
+  assert.equal(failure.objective_retry_reason, "ROUTING_EXECUTION_FAILURE");
+  assert.equal(
+    failure.semantic_work_digest,
+    assignment.semantic_work_digest
+  );
 });
