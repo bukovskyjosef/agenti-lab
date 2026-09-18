@@ -211,7 +211,8 @@ export async function preClaimCurrentness({
   state,
   assignment,
   comments,
-  observedAt = new Date().toISOString()
+  observedAt = new Date().toISOString(),
+  checkRouting = true
 }) {
   if (!state?.assignment) return { current: false, reason: "ASSIGNMENT_MISSING" };
   if (state.lifecycle === "STOPPED") return { current: false, reason: "WORK_ITEM_STOPPED" };
@@ -257,7 +258,7 @@ export async function preClaimCurrentness({
     }
   }
 
-  if (assignment.execution_route) {
+  if (checkRouting && assignment.execution_route) {
     const capacity = trustedRoutingPayloads(comments, CAPACITY_MARKER);
     const billing = trustedRoutingPayloads(comments, BILLING_SAFETY_MARKER);
     let selection;
@@ -617,7 +618,8 @@ export async function finalizeRun({ role, issueNumber, assignmentId, proposalPat
     runtime,
     state,
     assignment,
-    comments: loaded.comments
+    comments: loaded.comments,
+    checkRouting: false
   });
   if (!writerCurrent.current) {
     throw new Error("WRITER_CURRENTNESS_FAILED: " + writerCurrent.reason);
