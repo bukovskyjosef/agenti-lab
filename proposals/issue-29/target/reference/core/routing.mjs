@@ -31,7 +31,6 @@ const ROLE_CAPABILITIES = Object.freeze({
 const SEMANTIC_RELEVANT_KEYS = Object.freeze([
   "required_evidence_digest",
   "target_digest",
-  "role_result_digest",
   "human_input_digest",
   "human_decision_digest",
   "publication_target_digest",
