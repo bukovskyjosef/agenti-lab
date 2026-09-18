@@ -6,6 +6,7 @@ import {
   projectInvalidationState
 } from "./state-projection.mjs";
 import { workItemKey } from "./mapping.mjs";
+import { WorkItemMutationFence } from "./mutation-fence.mjs";
 import {
   capacityObservation,
   executionFailure,
@@ -376,7 +377,7 @@ export class MultiRepoOrchestrator {
     this.store = store;
     this.trustedResultActorIds = trustedResultActorIds;
     this.trustedStateAppId = trustedStateAppId;
-    this.receiverClaimLocks = new Map();
+    this.stateMutationFence = new WorkItemMutationFence();
   }
 
   async reconstruct(workItem, observedAt = new Date().toISOString()) {
@@ -391,25 +392,11 @@ export class MultiRepoOrchestrator {
     });
   }
 
-  async withReceiverClaimMutex(workItem, fn) {
-    const key = workItemKey(workItem);
-    const previous = this.receiverClaimLocks.get(key) ?? Promise.resolve();
-    let release;
-    const current = new Promise((resolve) => {
-      release = resolve;
-    });
-    const tail = previous.then(() => current);
-    this.receiverClaimLocks.set(key, tail);
-
-    await previous;
-    try {
-      return await fn();
-    } finally {
-      release();
-      if (this.receiverClaimLocks.get(key) === tail) {
-        this.receiverClaimLocks.delete(key);
-      }
-    }
+  async withStateMutationFence(workItem, fn) {
+    return this.stateMutationFence.withKey(
+      workItemKey(workItem),
+      fn
+    );
   }
 
   async materializeHumanRequest(workItem, state, action) {
@@ -826,6 +813,13 @@ export class MultiRepoOrchestrator {
   }
 
   async processWorkItem(workItem, observedAt = new Date().toISOString()) {
+    return this.withStateMutationFence(
+      workItem,
+      () => this.processWorkItemUnlocked(workItem, observedAt)
+    );
+  }
+
+  async processWorkItemUnlocked(workItem, observedAt = new Date().toISOString()) {
     let reconstructed = await this.reconstruct(workItem, observedAt);
 
     const recovery = await this.recoverFailedPlatformClaim(
@@ -1166,7 +1160,7 @@ export class MultiRepoOrchestrator {
       return { valid: false, reason: "WORK_ITEM_NOT_IN_CONTROL_REPOSITORY" };
     }
 
-    return this.withReceiverClaimMutex(workItem, async () => {
+    return this.withStateMutationFence(workItem, async () => {
       const leaseKey = receiverClaimLeaseKey(workItem);
       const leaseOwner = receiverClaimLeaseOwner({
         assignmentId: assignment.assignment_id,
@@ -1305,7 +1299,7 @@ export class MultiRepoOrchestrator {
       return { valid: false, reason: "WORK_ITEM_NOT_IN_CONTROL_REPOSITORY" };
     }
 
-    return this.withReceiverClaimMutex(workItem, async () => {
+    return this.withStateMutationFence(workItem, async () => {
       const leaseKey = receiverClaimLeaseKey(workItem);
       const leaseOwner = receiverClaimLeaseOwner({
         assignmentId: assignment.assignment_id,
@@ -1451,7 +1445,7 @@ export class MultiRepoOrchestrator {
     }
 
     try {
-    const evidenceWrite = await this.withReceiverClaimMutex(
+    const evidenceWrite = await this.withStateMutationFence(
       workItem,
       async () => {
         const reconstructed = await this.reconstruct(workItem, observedAt);
@@ -1585,7 +1579,7 @@ export class MultiRepoOrchestrator {
       return { valid: false, reason: "RUNNER_REPOSITORY_MISMATCH" };
     }
 
-    return this.withReceiverClaimMutex(
+    return this.withStateMutationFence(
       workItem,
       async () => {
         const claimKey = receiverClaimLeaseKey(workItem);
