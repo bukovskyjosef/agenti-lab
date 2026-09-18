@@ -7,7 +7,7 @@ This is the bounded executable adapter from `agenti-lab` Issue #23. It consumes,
 The service is only an operational adapter around the shared deterministic O core:
 
 - GitHub remains workflow/product authority;
-- SQLite stores only delivery, retry, dedup, effect receipt and lease data;
+- SQLite stores only delivery, retry, in-flight effect/cache and lease data; it is never the authoritative receipt for an applicable role run;
 - every authoritative O decision comes from a fresh GitHub reconstruction followed by `core.evaluate(...)`;
 - the adapter never defines a second transition table;
 - webhook payloads only wake/reconcile O and are not transition authority;
@@ -100,11 +100,15 @@ jobs:
 
 A normalized GitHub Actions result is accepted only from a configured trusted wrapper actor and only when its `run_id`/`run_attempt` resolve to the configured runner repository. Its execution instance ID must be `github-actions:<repository>:<run_id>:<run_attempt>`; self-reported logical IDs are rejected.
 
-The verification endpoint fresh-reads the control issue/state plus implementation repositories, rejects a stale fingerprint/candidate/repository mapping, and refuses the assignment if the shared core now authorizes another transition. The provider output itself never changes O state directly.
+The verification endpoint fresh-reads the control issue/state plus implementation repositories, rejects a stale fingerprint/candidate/repository mapping, and refuses the assignment if the shared core now authorizes another transition. The preflight also sends `GITHUB_RUN_ID` and `GITHUB_RUN_ATTEMPT`; O verifies that run against the configured workflow/repository and CAS-binds the owning run into the current GitHub state before provider work. A different run for the same assignment is rejected. The provider output itself never changes O state directly.
 
 ## Operational queue and recovery
 
-`deliveries` is keyed by `X-GitHub-Delivery`. A duplicate delivery is accepted once. Workers claim due rows with a lease, use a separate per-work-item lease for serialization, and retry transient failures with bounded backoff. Effect receipts suppress duplicate expensive workflow dispatches.
+`deliveries` is keyed by `X-GitHub-Delivery`. A duplicate delivery is accepted once. Workers claim due rows with a lease, use a separate per-work-item lease for serialization, and retry transient failures with bounded backoff. SQLite `effects` suppress only concurrent/in-flight duplicate dispatch attempts; a completed SQLite effect is not workflow authority.
+
+For an explicit role assignment, O requests workflow-run details from `workflow_dispatch` and CAS-binds the returned run ID into `workflow-state.assignment.workflow_run_id`, with a matching execution identity in `run_receipts`. Reconcile first consults this GitHub projection, so total SQLite loss cannot cause another dispatch for an already claimed current assignment. The receiver preflight independently verifies and can idempotently confirm/claim its own exact run before provider work. Receiving workflows must retain assignment-keyed GitHub Actions concurrency so that a rare dispatch-response/bind crash cannot let two unclaimed runs execute provider work concurrently; once one run wins the GitHub CAS claim, the other is rejected.
+
+When the shared core returns `INVALIDATE`, the adapter no longer safe-holds unchanged state. It consumes only the core-provided reason and `earliest_affected_point`, projects the dependent state under the same state-comment CAS, and uses the exact existing T01/T04/T08 assignment metadata from the Child #21 transition table when an assignment is required. Contract drift therefore converges to ANALYSIS/A, review evidence drift to IN_REVIEW/R, and release evidence drift to the APPROVED release boundary rather than repeating INVALIDATE forever.
 
 The periodic reconcile path enumerates managed control work items and enqueues synthetic wakes. Therefore correctness does not depend on webhook order or on receiving every callback.
 
