@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";\nimport { fileURLToPath } from "node:url";
 import {
   acceptMutableEvidence,
   candidateDigest,
@@ -15,7 +15,7 @@ import {
   verifyAcceptedEvidence
 } from "../core/index.mjs";
 
-const root = resolve(import.meta.dirname, "..");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const readJson = async (path) => JSON.parse(await readFile(resolve(root, path), "utf8"));
 
 const profile = await readJson("conformance/fixtures/project-profile.valid.json");
