@@ -149,9 +149,13 @@ const server = createServer(async (request, response) => {
       const rawBody = await readRawBody(request, 512 * 1024);
       const assignment = JSON.parse(rawBody.toString("utf8"));
       const runnerRepository = request.headers["x-agenti-runner-repository"] ?? "";
+      const workflowRunId = request.headers["x-agenti-workflow-run-id"] ?? "";
+      const workflowRunAttempt = request.headers["x-agenti-workflow-run-attempt"] ?? "";
       const result = await orchestrator.verifyAssignment(
         assignment,
-        runnerRepository
+        runnerRepository,
+        workflowRunId,
+        workflowRunAttempt
       );
       return json(response, result.valid ? 200 : 409, result);
     }
