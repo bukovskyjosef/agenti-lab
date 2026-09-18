@@ -845,6 +845,18 @@ export class MultiRepoOrchestrator {
           };
         }
 
+        const activeClaim = reconstructed.state.claim_control?.active_claim;
+        const claimCheck = this.core.verifyActiveClaim({
+          state: reconstructed.state,
+          assignmentId: assignment.assignment_id,
+          claimId: activeClaim?.claim_id,
+          claimGeneration: activeClaim?.claim_generation,
+          executionInstanceId: verified.execution_instance_id
+        });
+        if (!claimCheck.valid) {
+          return { accepted: false, reason: "FAILURE_CLAIM_" + claimCheck.reason };
+        }
+
         const capacity = capacityObservation({
           core: this.core,
           candidateId:
@@ -857,6 +869,8 @@ export class MultiRepoOrchestrator {
           core: this.core,
           assignment,
           executionInstanceId: verified.execution_instance_id,
+          claimId: activeClaim.claim_id,
+          claimGeneration: activeClaim.claim_generation,
           status,
           observedAt,
           retryAt
