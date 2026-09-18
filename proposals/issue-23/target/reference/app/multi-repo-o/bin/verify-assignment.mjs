@@ -17,7 +17,9 @@ const response = await fetch(`${baseUrl.replace(/\/$/, "")}/assignment/verify`, 
   headers: {
     Authorization: `Bearer ${secret}`,
     "Content-Type": "application/json",
-    "X-Agenti-Runner-Repository": process.env.GITHUB_REPOSITORY ?? ""
+    "X-Agenti-Runner-Repository": process.env.GITHUB_REPOSITORY ?? "",
+    "X-Agenti-Workflow-Run-Id": process.env.GITHUB_RUN_ID ?? "",
+    "X-Agenti-Workflow-Run-Attempt": process.env.GITHUB_RUN_ATTEMPT ?? ""
   },
   body: JSON.stringify(assignment)
 });
