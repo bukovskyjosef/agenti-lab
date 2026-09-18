@@ -87,11 +87,12 @@ export async function reconstructAuthority({
   profile,
   workItem,
   core,
-  trustedResultActorIds = new Set()
+  trustedResultActorIds = new Set(),
+  trustedStateAppId = null
 }) {
   const issue = await gh.getIssue(workItem.control_repository, workItem.issue_number);
   const comments = await gh.listIssueComments(workItem.control_repository, workItem.issue_number);
-  const stateComment = findStateComment(comments, core);
+  const stateComment = findStateComment(comments, core, trustedStateAppId);
   const state = stateComment ? core.parseStateComment(stateComment.body) : null;
 
   const members = await discoverLinkedPullRequests({ gh, profile, workItem });
