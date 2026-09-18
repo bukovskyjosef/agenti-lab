@@ -190,6 +190,12 @@ function baseState({
       published_identity: null
     },
     run_receipts: {},
+    claim_control: {
+      claim_version: 0,
+      active_claim: null,
+      last_terminal: null
+    },
+    material_operation: null,
     failure: {
       active_ref: null,
       retry_reason: null,
@@ -376,6 +382,7 @@ function assignmentEnvelopeForState(state, projectProfile, issuedAt) {
       }))
     ],
     capability_profile: a.capability_profile,
+    claim: { required: true },
     independence: {
       required: a.role === "R",
       must_differ_from_execution_instances:
