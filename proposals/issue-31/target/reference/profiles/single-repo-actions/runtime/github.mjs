@@ -39,6 +39,11 @@ export class GitHubClient {
   }
 
   getRepository() { return this.request(this.repoPath()); }
+  getBranch(branch) {
+    return this.request(
+      this.repoPath("/branches/" + encodeURIComponent(branch))
+    );
+  }
   getIssue(issueNumber) { return this.request(this.repoPath("/issues/" + Number(issueNumber))); }
   updateIssue(issueNumber, patch) {
     return this.request(this.repoPath("/issues/" + Number(issueNumber)), { method: "PATCH", body: patch });
