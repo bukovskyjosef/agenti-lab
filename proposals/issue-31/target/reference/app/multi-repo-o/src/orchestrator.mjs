@@ -100,11 +100,30 @@ async function writeStateCas({
 
   if (!previous) {
     if (freshStateComment) throw new Error("STATE_VERSION_CAS_MISMATCH");
-    return gh.createIssueComment(
-      workItem.control_repository,
-      workItem.issue_number,
-      core.renderStateComment(nextState)
-    );
+    try {
+      return await gh.createIssueComment(
+        workItem.control_repository,
+        workItem.issue_number,
+        core.renderStateComment(nextState)
+      );
+    } catch (error) {
+      const afterComments = await gh.listIssueComments(
+        workItem.control_repository,
+        workItem.issue_number
+      );
+      const durable = findStateComment(
+        afterComments,
+        core,
+        trustedStateAppId
+      );
+      if (
+        durable &&
+        core.digest(core.parseStateComment(durable.body)) === core.digest(nextState)
+      ) {
+        return durable;
+      }
+      throw error;
+    }
   }
 
   if (!freshStateComment || freshStateComment.id !== stateComment?.id) {
@@ -119,11 +138,61 @@ async function writeStateCas({
     throw new Error("STATE_VERSION_CAS_MISMATCH");
   }
 
-  return gh.updateIssueComment(
-    workItem.control_repository,
-    freshStateComment.id,
-    core.renderStateComment(nextState)
-  );
+  const body = core.renderStateComment(nextState);
+  try {
+    return await gh.updateIssueComment(
+      workItem.control_repository,
+      freshStateComment.id,
+      body
+    );
+  } catch (firstError) {
+    const afterComments = await gh.listIssueComments(
+      workItem.control_repository,
+      workItem.issue_number
+    );
+    const afterComment = findStateComment(
+      afterComments,
+      core,
+      trustedStateAppId
+    );
+    if (!afterComment || afterComment.id !== freshStateComment.id) {
+      throw new Error("STATE_VERSION_CAS_MISMATCH");
+    }
+    const observed = core.parseStateComment(afterComment.body);
+    if (core.digest(observed) === core.digest(nextState)) return afterComment;
+    if (core.digest(observed) !== core.digest(fresh)) {
+      throw new Error(
+        "STATE_VERSION_CAS_AMBIGUOUS_CONFLICT: " +
+        String(firstError.message ?? firstError)
+      );
+    }
+
+    try {
+      return await gh.updateIssueComment(
+        workItem.control_repository,
+        afterComment.id,
+        body
+      );
+    } catch (secondError) {
+      const finalComments = await gh.listIssueComments(
+        workItem.control_repository,
+        workItem.issue_number
+      );
+      const finalComment = findStateComment(
+        finalComments,
+        core,
+        trustedStateAppId
+      );
+      if (
+        finalComment &&
+        core.digest(core.parseStateComment(finalComment.body)) ===
+          core.digest(nextState)
+      ) {
+        return finalComment;
+      }
+      throw secondError;
+    }
+  }
 }
 
 function comparableAssignment(assignment) {
