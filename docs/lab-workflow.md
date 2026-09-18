@@ -84,6 +84,52 @@ Pokud Human skutečně chce změnit pořadí, scope, blocker nebo next authority
 
 Tento guard platí i pro copy-paste prompt, který byl správný v okamžiku předchozího handoffu. Pokud se repository state mezitím změnil, **stale handoff se neprovádí**.
 
+### 2.2 Exclusive active claim / lease
+
+Úspěšný pre-run guard ještě neopravňuje více agentů pracovat současně na stejném work itemu. Před první materiální prací musí run získat **jeden durable exclusive claim**.
+
+#### Semantika
+
+- Jeden Issue/work item může mít nejvýše **jeden aktivní claim**.
+- Claim rezervuje work item pro konkrétní aktivní roli/run.
+- Druhý agent provede no-op i tehdy, pokud má stejnou roli, stejný handoff prompt nebo identický účel.
+- Paralelní práce je legitimní pouze na samostatných work items, typicky child Issues.
+- `BLOCKED` zůstává stavem skutečného blockeru; obsazená práce se značí `IN PROGRESS` / `CLAIMED`, aby se nemíchaly dvě různé příčiny neeligibility.
+
+#### Minimální durable claim data
+
+Claim musí umožnit další session poznat alespoň:
+
+- `role`,
+- `claim_id` / run identifier,
+- `claimed_at`,
+- current work item,
+- exact target/head/candidate binding, pokud je pro práci relevantní,
+- případně `lease_expires_at` / heartbeat pouze tam, kde je taková politika skutečně implementována.
+
+Handoff prompt není claim. Claim vzniká až poté, co nový run fresh-readne stav, projde §2.1 a durable označí práci jako převzatou.
+
+#### Konflikt claimů
+
+Najde-li nový run existující aktivní claim, nesmí:
+- zahájit materiální práci,
+- vytvářet duplicitní review/implementaci,
+- měnit status tak, aby cizí claim obešel.
+
+Místo toho oznámí no-op a identifikuje existující claim.
+
+#### Uvolnění a recovery
+
+Claim se durable uvolní nebo nahradí při:
+1. dokončení kroku a zápisu dalšího waiting ownership,
+2. explicitním blockeru/abortu,
+3. autorizovaném reassignmentu,
+4. bezpečném stale-claim recovery.
+
+Bez explicitní lease/heartbeat politiky agent **nesmí sám vyhodnotit cizí claim jako stale**. K nebo Human nejprve ověří situaci a durable claim zruší/reassignuje. Automatická orchestrace může použít lease expiry/heartbeat jen pokud je recovery CAS/idempotentní a je jasné, že expiry není totéž co dokončení práce.
+
+Pokud se exact target/head změní, claim navázaný na předchozí target se nesmí automaticky přenést; dotčený run musí zastavit nebo znovu získat claim pro nový oprávněný target.
+
 ## 3. K — Konzultant a Human dispatch
 
 K je Human-facing poradce a koordinátor. Pomáhá Humanovi:
