@@ -292,6 +292,8 @@ export function normalizeRoleResult({
     result_type: proposal.result_type,
     trusted: {
       assignment_id: trustedFacts.assignment_id,
+      claim_id: trustedFacts.claim_id,
+      claim_generation: trustedFacts.claim_generation,
       observed_state_version: trustedFacts.observed_state_version,
       observed_fingerprint: trustedFacts.observed_fingerprint,
       execution_attestation: trustedFacts.execution_attestation,
