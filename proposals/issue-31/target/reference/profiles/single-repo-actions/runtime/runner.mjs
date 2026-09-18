@@ -237,12 +237,14 @@ export async function preClaimCurrentness({
     return { current: false, reason: "CONTRACT_DRIFT_BEFORE_CLAIM", issue };
   }
 
+  let currentPull = null;
   if (state.candidate?.kind === "single") {
     const member = state.candidate.members?.[0];
     if (!member?.pr_number || !member?.head_sha) {
       return { current: false, reason: "CANDIDATE_BINDING_INCOMPLETE", issue };
     }
     const pull = await github.getPull(member.pr_number);
+    currentPull = pull;
     if (pull.head?.sha !== member.head_sha) {
       return { current: false, reason: "CANDIDATE_HEAD_DRIFT_BEFORE_CLAIM", issue, pull };
     }
@@ -287,6 +289,46 @@ export async function preClaimCurrentness({
     }
   }
 
+  let targetBinding;
+  if (
+    assignment.role === "D" &&
+    state.candidate?.kind !== "single"
+  ) {
+    const branch = await github.getBranch(
+      runtime.runtimeConfig.default_branch
+    );
+    const baseSha = branch.commit?.sha;
+    if (!baseSha) {
+      return {
+        current: false,
+        reason: "DEFAULT_BRANCH_HEAD_UNAVAILABLE",
+        issue
+      };
+    }
+    targetBinding = {
+      kind: "D_BASE",
+      repository: github.repository,
+      branch: runtime.runtimeConfig.default_branch,
+      base_sha: baseSha
+    };
+  } else if (state.candidate?.kind === "single") {
+    const member = state.candidate.members[0];
+    targetBinding = {
+      kind: assignment.role === "P" ? "PUBLISH_CANDIDATE" : "CANDIDATE",
+      repository: member.repository,
+      pr_number: member.pr_number,
+      head_sha: member.head_sha,
+      base_ref_or_sha: member.base_ref_or_sha,
+      observed_pull_base_sha: currentPull?.base?.sha ?? null
+    };
+  } else {
+    targetBinding = {
+      kind: "CONTRACT",
+      repository: github.repository,
+      contract_digest: state.contract.digest
+    };
+  }
+
   if (assignment.role === "P") {
     if (
       runtime.projectProfile.release_authorization?.required &&
@@ -325,9 +367,21 @@ export async function preClaimCurrentness({
         issue
       };
     }
+    targetBinding = {
+      ...targetBinding,
+      release_target_digest: releaseTargetDigest(github, runtime),
+      release_gate_digest: state.release_authorization?.gate_digest ?? null,
+      release_authorization_id:
+        state.release_authorization?.authorization_id ?? null
+    };
   }
 
-  return { current: true, issue };
+  return {
+    current: true,
+    issue,
+    target_binding: targetBinding,
+    target_digest: digest(targetBinding)
+  };
 }
 
 export async function prepareRun({ role, issueNumber, assignmentId, outDir = ".agenti-run" }) {
@@ -406,6 +460,7 @@ export async function prepareRun({ role, issueNumber, assignmentId, outDir = ".a
       assignment_freshness_fingerprint: assignment.state.fingerprint,
       semantic_work_digest: assignment.semantic_work_digest ?? null,
       candidate_digest: state.candidate?.digest ?? null,
+      target_digest: preCurrent.target_digest,
       active_claim: "ABSENT"
     },
     claimant: { execution_attestation: attestation },
@@ -464,6 +519,13 @@ export async function prepareRun({ role, issueNumber, assignmentId, outDir = ".a
     assignment: postAssignment,
     comments: claimed.comments
   });
+  if (
+    postCurrent.current &&
+    postCurrent.target_digest !== claimGrant.binding.target_digest
+  ) {
+    postCurrent.current = false;
+    postCurrent.reason = "TARGET_BINDING_DRIFT_AFTER_CLAIM";
+  }
   if (!postCurrent.current) {
     const revoked = terminalizeClaim({
       state: claimed.state,
@@ -487,7 +549,14 @@ export async function prepareRun({ role, issueNumber, assignmentId, outDir = ".a
   const issue = postCurrent.issue;
   await mkdir(outDir, { recursive: true });
   await writeFile(outDir + "/assignment.json", JSON.stringify(assignment, null, 2));
-  await writeFile(outDir + "/run-context.json", JSON.stringify({ attestation, claim_grant: claimGrant }, null, 2));
+  await writeFile(
+    outDir + "/run-context.json",
+    JSON.stringify({
+      attestation,
+      claim_grant: claimGrant,
+      target_binding: postCurrent.target_binding
+    }, null, 2)
+  );
   await writeFile(outDir + "/work-item.md", issue.body ?? "");
   await writeFile(outDir + "/comments.json", JSON.stringify(loaded.comments, null, 2));
 
@@ -495,8 +564,19 @@ export async function prepareRun({ role, issueNumber, assignmentId, outDir = ".a
   await writeOutput("claim_id", claimGrant.claim_id);
   await writeOutput("claim_generation", claimGrant.claim_generation);
   await writeOutput("execution_instance_id", executionInstanceId);
-  await writeOutput("candidate_ref", assignment.candidate.members?.[0]?.head_sha ?? runtime.runtimeConfig.default_branch);
-  return { skip: false, assignment, attestation, claimGrant };
+  await writeOutput(
+    "candidate_ref",
+    assignment.candidate.members?.[0]?.head_sha ??
+      postCurrent.target_binding?.base_sha ??
+      runtime.runtimeConfig.default_branch
+  );
+  return {
+    skip: false,
+    assignment,
+    attestation,
+    claimGrant,
+    targetBinding: postCurrent.target_binding
+  };
 }
 
 export async function finalizeRun({ role, issueNumber, assignmentId, proposalPath, contextPath = ".agenti-run/run-context.json" }) {
@@ -531,6 +611,20 @@ export async function finalizeRun({ role, issueNumber, assignmentId, proposalPat
     executionInstanceId: runContext.attestation?.execution_instance_id
   });
   if (!claimCheck.valid) throw new Error("CLAIM_NOT_CURRENT: " + claimCheck.reason);
+
+  const writerCurrent = await preClaimCurrentness({
+    github,
+    runtime,
+    state,
+    assignment,
+    comments: loaded.comments
+  });
+  if (!writerCurrent.current) {
+    throw new Error("WRITER_CURRENTNESS_FAILED: " + writerCurrent.reason);
+  }
+  if (writerCurrent.target_digest !== claimGrant.binding.target_digest) {
+    throw new Error("WRITER_TARGET_BINDING_DRIFT");
+  }
 
   const trustedFacts = {
     assignment_id: assignment.assignment_id,
