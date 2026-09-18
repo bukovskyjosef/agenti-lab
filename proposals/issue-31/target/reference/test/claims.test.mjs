@@ -6,6 +6,7 @@ import {
   materialOperationId,
   prepareMaterialOperation,
   recoverClaim,
+  renewClaimCAS,
   stateMutationKey,
   terminalizeClaim,
   verifyActiveClaim,
@@ -226,5 +227,118 @@ test("state mutation key is stable per work item and distinct across children", 
   assert.notEqual(
     stateMutationKey({ control_repository: "org/repo", issue_number: 20 }),
     stateMutationKey({ control_repository: "org/repo", issue_number: 21 })
+  );
+});
+
+test("NONE recovery requires exact Human-authorized claim and preserves evidence", () => {
+  const initial = state();
+  const req = request(initial);
+  req.lease = { mode: "NONE" };
+  const acquired = acquireClaimCAS({
+    state: initial,
+    request: req,
+    acquiredAt: "2026-09-18T20:00:00Z"
+  });
+  assert.equal(acquired.acquired, true);
+  assert.equal(recoverClaim({
+    state: acquired.state,
+    reason: "ABORTED",
+    humanAuthorizedClaimId: "clm-wrong"
+  }).recovered, false);
+
+  const recovered = recoverClaim({
+    state: acquired.state,
+    reason: "ABORTED",
+    humanAuthorizedClaimId: acquired.grant.claim_id,
+    durableEvidenceRef: "issue-comment:77"
+  });
+  assert.equal(recovered.recovered, true);
+  assert.equal(
+    recovered.state.claim_control.last_terminal.durable_evidence_ref,
+    "issue-comment:77"
+  );
+});
+
+test("heartbeat renewal is exact-token/version fenced and expiry is not success", () => {
+  const initial = state();
+  const req = request(initial);
+  req.lease = {
+    mode: "EXPIRING_HEARTBEAT",
+    expires_at: "2026-09-18T20:05:00Z",
+    heartbeat_sequence: 1,
+    lease_token_digest: fp
+  };
+  const acquired = acquireClaimCAS({
+    state: initial,
+    request: req,
+    acquiredAt: "2026-09-18T20:00:00Z"
+  });
+  assert.equal(acquired.acquired, true);
+
+  const wrongToken = renewClaimCAS({
+    state: acquired.state,
+    claimId: acquired.grant.claim_id,
+    claimGeneration: acquired.grant.claim_generation,
+    executionInstanceId: "exec-1",
+    expectedClaimVersion: acquired.state.claim_control.claim_version,
+    leaseTokenDigest: sw,
+    expiresAt: "2026-09-18T20:10:00Z",
+    heartbeatSequence: 2
+  });
+  assert.equal(wrongToken.renewed, false);
+  assert.equal(wrongToken.reason, "LEASE_TOKEN_MISMATCH");
+
+  const renewed = renewClaimCAS({
+    state: acquired.state,
+    claimId: acquired.grant.claim_id,
+    claimGeneration: acquired.grant.claim_generation,
+    executionInstanceId: "exec-1",
+    expectedClaimVersion: acquired.state.claim_control.claim_version,
+    leaseTokenDigest: fp,
+    expiresAt: "2026-09-18T20:10:00Z",
+    heartbeatSequence: 2
+  });
+  assert.equal(renewed.renewed, true);
+  assert.equal(renewed.state.state_version, initial.state_version);
+  assert.equal(
+    renewed.state.claim_control.claim_version,
+    acquired.state.claim_control.claim_version + 1
+  );
+
+  const expired = recoverClaim({
+    state: renewed.state,
+    heartbeatExpired: true,
+    durableEvidenceRef: "heartbeat-expiry:verified"
+  });
+  assert.equal(expired.recovered, true);
+  assert.equal(expired.reason, "EXPIRED");
+  assert.equal(
+    expired.state.claim_control.last_terminal.terminal_reason,
+    "EXPIRED"
+  );
+});
+
+test("separate child work items can hold independent claims", () => {
+  const childA = state();
+  childA.work_item.issue_number = 101;
+  const childB = state();
+  childB.work_item.issue_number = 102;
+
+  const a = acquireClaimCAS({
+    state: childA,
+    request: request(childA, "exec-child-a"),
+    acquiredAt: "2026-09-18T20:00:00Z"
+  });
+  const b = acquireClaimCAS({
+    state: childB,
+    request: request(childB, "exec-child-b"),
+    acquiredAt: "2026-09-18T20:00:00Z"
+  });
+
+  assert.equal(a.acquired, true);
+  assert.equal(b.acquired, true);
+  assert.notEqual(
+    stateMutationKey(childA.work_item),
+    stateMutationKey(childB.work_item)
   );
 });
