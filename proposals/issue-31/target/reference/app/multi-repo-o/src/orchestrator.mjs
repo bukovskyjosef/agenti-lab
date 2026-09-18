@@ -315,25 +315,6 @@ function claimedState({
     dispatch_status: status,
     workflow_run_id: runId
   };
-  next.run_receipts = {
-    ...next.run_receipts,
-    [assignment.assignment_id]: {
-      ...(next.run_receipts?.[assignment.assignment_id] ?? {}),
-      fingerprint: assignment.state.fingerprint,
-      assignment_id: assignment.assignment_id,
-      execution_instance_id: executionInstanceId,
-      claim_id: grant.claim_id,
-      claim_generation: grant.claim_generation,
-      ...(assignment.semantic_work_digest
-        ? {
-            role: assignment.role,
-            purpose: assignment.purpose,
-            semantic_work_digest: assignment.semantic_work_digest,
-            freshness_fingerprint: assignment.state.fingerprint
-          }
-        : {})
-    }
-  };
   next.updated_by = {
     o_run_id: oRunId,
     transition_id: state.updated_by.transition_id,
@@ -549,25 +530,33 @@ export class MultiRepoOrchestrator {
     });
     if (!verified.valid) return verified;
 
-    const currentOwner = normalizedRunId(
-      reconstructed.state?.assignment?.workflow_run_id
+    const activeClaim =
+      reconstructed.state?.claim_control?.active_claim ?? null;
+    const activeRunId = normalizedRunId(
+      activeClaim?.owner?.platform_run_id
     );
-    if (currentOwner && currentOwner !== verified.run_id) {
+    if (activeClaim && activeRunId !== verified.run_id) {
       return {
         valid: false,
         reason: "ASSIGNMENT_RUN_OWNERSHIP_CONFLICT",
-        workflow_run_id: currentOwner
+        workflow_run_id: activeRunId
       };
     }
 
     if (
-      currentOwner === verified.run_id &&
+      activeClaim &&
+      activeRunId === verified.run_id &&
       reconstructed.state.assignment.dispatch_status === status
     ) {
       return {
         ...verified,
         state: reconstructed.state,
         stateComment: reconstructed.stateComment,
+        claim_grant: {
+          claim_id: activeClaim.claim_id,
+          claim_generation: activeClaim.claim_generation,
+          claim_version: reconstructed.state.claim_control.claim_version
+        },
         already_claimed: true
       };
     }
@@ -601,23 +590,31 @@ export class MultiRepoOrchestrator {
         state: nextState,
         stateComment,
         claim_grant: claimed.grant,
-        already_claimed: currentOwner === verified.run_id
+        already_claimed: Boolean(activeClaim && activeRunId === verified.run_id)
       };
     } catch (error) {
       if (error.message !== "STATE_VERSION_CAS_MISMATCH") throw error;
 
       const refreshed = await this.reconstruct(reconstructed.state.work_item);
+      const refreshedClaim =
+        refreshed.state?.claim_control?.active_claim ?? null;
       const refreshedOwner = normalizedRunId(
-        refreshed.state?.assignment?.workflow_run_id
+        refreshedClaim?.owner?.platform_run_id
       );
       if (
         refreshed.state?.assignment?.assignment_id === assignment.assignment_id &&
+        refreshedClaim &&
         refreshedOwner === verified.run_id
       ) {
         return {
           ...verified,
           state: refreshed.state,
           stateComment: refreshed.stateComment,
+          claim_grant: {
+            claim_id: refreshedClaim.claim_id,
+            claim_generation: refreshedClaim.claim_generation,
+            claim_version: refreshed.state.claim_control.claim_version
+          },
           already_claimed: true
         };
       }
@@ -641,8 +638,10 @@ export class MultiRepoOrchestrator {
       return { state, stateComment: reconstructed.stateComment, dispatched: null };
     }
 
-    if (state.assignment.workflow_run_id !== null &&
-        state.assignment.workflow_run_id !== undefined) {
+    const activeClaim = state.claim_control?.active_claim;
+    if (
+      activeClaim?.assignment_id === assignment.assignment_id
+    ) {
       return {
         state,
         stateComment: reconstructed.stateComment,
@@ -650,7 +649,9 @@ export class MultiRepoOrchestrator {
           dispatched: false,
           duplicate: true,
           durable_claim: true,
-          workflow_run_id: state.assignment.workflow_run_id,
+          claim_id: activeClaim.claim_id,
+          claim_generation: activeClaim.claim_generation,
+          workflow_run_id: activeClaim.owner?.platform_run_id ?? null,
           target: runnerTarget(this.profile, assignment.role, assignment)
         }
       };
