@@ -221,6 +221,21 @@ export function normalizeRoleResult({
     throw new Error("Execution attestation not issued for assignment");
   }
 
+  let normalizedPayload = proposal.payload;
+  if (proposal.role === "D") {
+    if (!trustedFacts.change_artifact) {
+      throw new Error("D normalization requires wrapper-owned trusted change_artifact");
+    }
+    normalizedPayload = {
+      ...proposal.payload,
+      change_artifact: trustedFacts.change_artifact,
+      author_validation: {
+        ...proposal.payload.author_validation,
+        refs: trustedFacts.author_validation_refs ?? proposal.payload.author_validation?.refs ?? []
+      }
+    };
+  }
+
   const withoutDigest = {
     schema_version: 1,
     role: proposal.role,
@@ -236,7 +251,7 @@ export function normalizeRoleResult({
     evidence_refs: proposal.evidence_refs ?? [],
     human_request: proposal.human_request ?? null,
     retry_or_failure: proposal.retry_or_failure ?? null,
-    payload: proposal.payload
+    payload: normalizedPayload
   };
 
   const normalized = { ...withoutDigest, result_digest: digest(withoutDigest) };
