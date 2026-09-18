@@ -205,8 +205,11 @@ async function writeStateCas({
 
 function comparableAssignment(assignment) {
   if (!assignment) return null;
-  const { issued_at, ...rest } = assignment;
-  return rest;
+  const { issued_at, claim, ...rest } = assignment;
+  return {
+    ...rest,
+    claim: { required: claim?.required === true }
+  };
 }
 
 function assignmentMatchesState(assignment, state, profile, core) {
@@ -239,6 +242,7 @@ function claimedState({
   runAttempt,
   status,
   executionInstanceId,
+  targetDigest,
   core,
   oRunId
 }) {
@@ -275,6 +279,7 @@ function claimedState({
         assignment_freshness_fingerprint: assignment.state.fingerprint,
         semantic_work_digest: assignment.semantic_work_digest ?? null,
         candidate_digest: next.candidate?.digest ?? null,
+        target_digest: targetDigest,
         active_claim: "ABSENT"
       },
       claimant: {
@@ -390,6 +395,88 @@ export class MultiRepoOrchestrator {
       trustedStateAppId: this.trustedStateAppId,
       observedAt
     });
+  }
+
+  async deriveClaimTarget(state, assignment) {
+    const runner = runnerTarget(
+      this.profile,
+      assignment.role,
+      assignment
+    );
+    const members = [...(state.candidate?.members ?? [])]
+      .map((member) => ({
+        repository: member.repository,
+        pr_number: member.pr_number ?? null,
+        head_sha: member.head_sha,
+        base_ref_or_sha: member.base_ref_or_sha ?? null
+      }))
+      .sort((a, b) =>
+        (a.repository + ":" + (a.pr_number ?? 0))
+          .localeCompare(b.repository + ":" + (b.pr_number ?? 0))
+      );
+
+    let binding;
+    if (assignment.role === "A") {
+      binding = {
+        kind: "A_CONTRACT",
+        control_repository: state.work_item.control_repository,
+        issue_number: state.work_item.issue_number,
+        contract_digest: state.contract.digest
+      };
+    } else if (
+      assignment.role === "D" &&
+      state.candidate?.kind === "none"
+    ) {
+      const repository = await this.gh.getRepository(runner.repository);
+      const defaultBranch = repository.default_branch;
+      if (!defaultBranch) {
+        throw new Error("D_TARGET_DEFAULT_BRANCH_MISSING");
+      }
+      const branch = await this.gh.getBranch(
+        runner.repository,
+        defaultBranch
+      );
+      if (!branch.commit?.sha) {
+        throw new Error("D_TARGET_BASE_SHA_MISSING");
+      }
+      binding = {
+        kind: "D_BASE",
+        repository: runner.repository,
+        base_ref: defaultBranch,
+        base_sha: branch.commit.sha
+      };
+    } else {
+      binding = {
+        kind: assignment.role + "_CANDIDATE",
+        execution_repository: runner.repository,
+        candidate_kind: state.candidate?.kind ?? "none",
+        candidate_digest: state.candidate?.digest ?? null,
+        members
+      };
+      if (assignment.role === "P") {
+        binding.release_authorization = {
+          status: state.release_authorization?.status ?? null,
+          authorization_id:
+            state.release_authorization?.authorization_id ?? null,
+          candidate_digest:
+            state.release_authorization?.candidate_digest ?? null,
+          target_digest:
+            state.release_authorization?.target_digest ?? null,
+          gate_digest:
+            state.release_authorization?.gate_digest ?? null,
+          context_digest:
+            state.release_authorization?.context_digest ?? null
+        };
+        binding.publication_operations = [
+          ...(this.profile.publication?.boundary_operations ?? [])
+        ].sort();
+      }
+    }
+
+    return {
+      binding,
+      digest: this.core.digest(binding)
+    };
   }
 
   async withStateMutationFence(workItem, fn) {
@@ -514,7 +601,8 @@ export class MultiRepoOrchestrator {
     runnerRepository,
     workflowRunId,
     workflowRunAttempt,
-    status
+    status,
+    targetDigest
   }) {
     const verified = await this.verifyRunnerWorkflowRun({
       assignment,
@@ -529,6 +617,16 @@ export class MultiRepoOrchestrator {
     const activeRunId = normalizedRunId(
       activeClaim?.owner?.platform_run_id
     );
+    if (
+      activeClaim &&
+      activeClaim.binding?.target_digest !== targetDigest
+    ) {
+      return {
+        valid: false,
+        reason: "CLAIM_TARGET_BINDING_STALE",
+        workflow_run_id: activeRunId
+      };
+    }
     if (activeClaim && activeRunId !== verified.run_id) {
       return {
         valid: false,
@@ -562,6 +660,7 @@ export class MultiRepoOrchestrator {
       runAttempt: verified.run_attempt,
       status,
       executionInstanceId: verified.execution_instance_id,
+      targetDigest,
       core: this.core,
       oRunId:
         `run-claim:${assignment.assignment_id}:${verified.run_id}:${verified.run_attempt}`
@@ -623,7 +722,7 @@ export class MultiRepoOrchestrator {
 
   async ensureCurrentAssignmentDispatched(reconstructed, observedAt) {
     const state = reconstructed.state;
-    const assignment = assignmentEnvelopeFromState(
+    let assignment = assignmentEnvelopeFromState(
       state,
       this.profile,
       observedAt
@@ -631,6 +730,16 @@ export class MultiRepoOrchestrator {
     if (!assignment) {
       return { state, stateComment: reconstructed.stateComment, dispatched: null };
     }
+
+    const issuanceTarget = await this.deriveClaimTarget(state, assignment);
+    assignment = {
+      ...assignment,
+      claim: {
+        ...assignment.claim,
+        target_digest: issuanceTarget.digest,
+        target_binding: issuanceTarget.binding
+      }
+    };
 
     const activeClaim = state.claim_control?.active_claim;
     if (
@@ -673,7 +782,8 @@ export class MultiRepoOrchestrator {
       runnerRepository: dispatched.target.repository,
       workflowRunId: dispatched.workflow_run_id,
       workflowRunAttempt: dispatched.run_attempt ?? 1,
-      status: "dispatched"
+      status: "dispatched",
+      targetDigest: assignment.claim.target_digest
     });
 
     if (!claim.valid) {
@@ -1636,19 +1746,76 @@ export class MultiRepoOrchestrator {
             };
           }
 
+          if (!assignment.claim?.target_digest) {
+            return {
+              valid: false,
+              reason: "ASSIGNMENT_TARGET_BINDING_MISSING"
+            };
+          }
+          const currentTarget = await this.deriveClaimTarget(
+            reconstructed.state,
+            assignment
+          );
+          if (currentTarget.digest !== assignment.claim.target_digest) {
+            return {
+              valid: false,
+              reason: "ASSIGNMENT_TARGET_BINDING_STALE",
+              expected_target_digest: assignment.claim.target_digest,
+              current_target_digest: currentTarget.digest
+            };
+          }
+
           const claim = await this.bindAssignmentRun({
             reconstructed,
             assignment,
             runnerRepository,
             workflowRunId,
             workflowRunAttempt,
-            status: "running"
+            status: "running",
+            targetDigest: assignment.claim.target_digest
           });
           if (!claim.valid) {
             return {
               valid: false,
               reason: claim.reason,
               workflow_run_id: claim.workflow_run_id ?? null
+            };
+          }
+
+          const postClaim = await this.reconstruct(workItem);
+          const postTarget = await this.deriveClaimTarget(
+            postClaim.state,
+            assignment
+          );
+          const postActive = postClaim.state.claim_control?.active_claim;
+          if (
+            !postActive ||
+            postActive.claim_id !==
+              (claim.claim_grant?.claim_id ?? postActive.claim_id) ||
+            postActive.binding?.target_digest !==
+              assignment.claim.target_digest ||
+            postTarget.digest !== assignment.claim.target_digest
+          ) {
+            let revokedState = postClaim.state;
+            if (postActive) {
+              revokedState = this.core.terminalizeClaim({
+                state: postClaim.state,
+                terminalReason: "REVOKED_DRIFT",
+                durableEvidenceRef: "app-pre-provider-target-drift"
+              }).state;
+              await writeStateCas({
+                gh: this.gh,
+                workItem,
+                previous: postClaim.state,
+                stateComment: postClaim.stateComment,
+                nextState: revokedState,
+                core: this.core,
+                trustedStateAppId: this.trustedStateAppId
+              });
+            }
+            return {
+              valid: false,
+              reason: "ASSIGNMENT_TARGET_CHANGED_DURING_CLAIM"
             };
           }
 
