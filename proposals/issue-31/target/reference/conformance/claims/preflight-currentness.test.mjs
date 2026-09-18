@@ -80,6 +80,7 @@ function assignment(s) {
 
 const runtime = {
   projectProfile: {
+    human: { principals: [{ actor_id: 1001 }] },
     required_checks: [],
     publication: { boundary_operations: ["MERGE"] },
     release_authorization: { required: false }
@@ -215,4 +216,43 @@ test("D without a current candidate binds the exact default-branch SHA", async (
     });
     assert.equal(moved.current, true);
     assert.notEqual(moved.target_digest, first.target_digest);
+  }));
+
+test("fresh configured Human Stop blocks pre-run authority until later Reopen", async () =>
+  withRunner(async ({ preClaimCurrentness }) => {
+    const s = state();
+    const github = {
+      repository: "example/product",
+      getIssue: async () => ({ body: "Stable contract" })
+    };
+    const stop = {
+      id: 10,
+      body: "/agenti stop emergency",
+      user: { id: 1001 }
+    };
+    const blocked = await preClaimCurrentness({
+      github,
+      runtime,
+      state: s,
+      assignment: assignment(s),
+      comments: [
+        { id: 9, body: "/agenti stop ignored", user: { id: 9999 } },
+        stop
+      ]
+    });
+    assert.equal(blocked.current, false);
+    assert.equal(blocked.reason, "HUMAN_STOP_PENDING");
+    assert.equal(blocked.stop_comment_id, 10);
+
+    const reopened = await preClaimCurrentness({
+      github,
+      runtime,
+      state: s,
+      assignment: assignment(s),
+      comments: [
+        stop,
+        { id: 11, body: "/agenti reopen", user: { id: 1001 } }
+      ]
+    });
+    assert.equal(reopened.current, true);
   }));
