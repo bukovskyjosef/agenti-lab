@@ -48,7 +48,7 @@ function baseProfile() {
     publication: { boundary_operations: ["MERGE"] },
     state_projection: { marker: "agenti-state:v1", single_writer: "O" },
     work_item_claims: {
-      mutation_domain: "sqlite-shared-work-item-mutex",
+      mutation_domain: "single-instance-nonexpiring-process-fence",
       recovery: { mode: "PLATFORM_RUN" },
       material_write_fencing: "REQUIRED"
     },
@@ -111,7 +111,7 @@ test("installation token is restricted to one configured repository and O permis
   );
 });
 
-test("multi-instance App rejects local SQLite mutation domain", () => {
+test("multi-instance App rejects single-instance process mutation domain", () => {
   const profile = baseProfile();
   const config = {
     projectProfile: profile,
