@@ -51,7 +51,13 @@ jobs:
         with:
           name: agenti-context-${{ inputs.assignment_id }}
           path: ${{ runner.temp }}/agenti-run
-      - uses: openai/codex-action@86365089eb2b84e0a8fb0717b304f8bdcb13b20e
+      - name: Explicit test-only fake D runner
+        if: vars.AGENTI_TEST_MODE == 'true'
+        env:
+          AGENTI_TEST_MODE: "true"
+        run: node .agenti-runtime/runtime/fake-runner.mjs D "$RUNNER_TEMP/agenti-run" "$RUNNER_TEMP/agenti-run/proposal.json"
+      - if: vars.AGENTI_TEST_MODE != 'true'
+        uses: openai/codex-action@86365089eb2b84e0a8fb0717b304f8bdcb13b20e
         with:
           openai-api-key: ${{ secrets[vars.AGENTI_CODEX_SECRET_NAME] }}
           permission-profile: ":workspace"
