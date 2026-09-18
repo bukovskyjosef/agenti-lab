@@ -48,7 +48,7 @@ The control repository owns exactly one claim projection for the logical work it
 
 The App's SQLite `work_leases` table is an operational single-node/shared-database mutation mutex. O processing, receiver claim binding and execution-failure/T14 writes use the same `workItemKey` domain. GitHub `claim_control` remains reconstructable authority after operational DB loss.
 
-A deployment that cannot provide one linearizable shared work-item mutation domain must fail doctor/conformance rather than silently run multi-instance with local-only locks.
+A deployment that cannot provide one linearizable shared work-item mutation domain must fail doctor/conformance rather than silently run multi-instance with local-only locks. The bundled SQLite reference is explicitly single-instance; declared multi-instance use is rejected.
 
 ## Material-write fence
 
@@ -58,14 +58,20 @@ Before an A/D/R/P sink operation, the deterministic writer validates:
 - trusted execution instance ownership;
 - current candidate/target binding as applicable.
 
-D candidate writes and P publication derive deterministic `material_operation_id` values from work item + claim + assignment + operation + target. Sink-specific native idempotence/query semantics remain required for ambiguous outcomes.
+D candidate writes and P publication derive deterministic `material_operation_id` values from work item + claim + assignment + operation + target.
 
-A pre-write GET without holding the shared fence is not sufficient.
+For the single-repo Actions profile the writer job itself holds the shared `agenti-state-...` fence across the sink call.
+
+For remote multi-repo writers, `/material/prepare` first writes one exact claim-bound `PREPARED` operation into the authoritative control projection under the shared work-item mutex. O safe-holds conflicting semantic mutations until `/material/resolve` records APPLIED / NOT_APPLIED / HUMAN_ACTION_REQUIRED. The PREPARED intent therefore fixes the legal ordering before the remote sink begins without giving O role/P credentials.
+
+A pre-write GET without the shared/native fence or PREPARED operation intent is not sufficient.
 
 ## Recovery
 
-- `MANUAL_H`: no automatic expiry; Human must authorize exact-claim recovery.
-- `PLATFORM_RUN`: automatic recovery only after trusted platform run is terminal non-success, no accepted result exists and the claim is still current.
+- `MANUAL_H`: no automatic expiry; configured Human must durably authorize the exact claim, e.g. `/agenti claim recover <claim-id>` plus reason.
+- `PLATFORM_RUN`: automatic recovery only after trusted platform run is terminal non-success, no accepted result exists, the claim is still current and no unresolved material operation exists. Role jobs are bounded by timeout.
 - `EXPIRING_HEARTBEAT`: renewal requires exact claim id/generation/version/holder/token/sequence; expiry terminalizes the claim and never implies success.
+
+Projection POST/PATCH ambiguity is resolved by durable reread under the same mutation fence. If the intended projection is already present, the operation succeeds idempotently; if the old projection is unchanged, at most one safe retry is attempted; a conflicting later projection is never overwritten.
 
 Stopped work never auto-resumes.
