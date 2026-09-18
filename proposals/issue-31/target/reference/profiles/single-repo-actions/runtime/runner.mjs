@@ -4,12 +4,16 @@ import {
   acquireClaimCAS,
   digest,
   normalizeRoleResult,
+  selectRunnerCandidate,
+  terminalizeClaim,
   verifyActiveClaim,
   validateSchema
 } from "../core/index.mjs";
 import { githubClientFromEnv } from "./github.mjs";
 import {
+  isTrustedActionsActor,
   loadState,
+  parseMachinePayload,
   renderMachineComment,
   ROLE_RESULT_MARKER,
   saveStateCAS
@@ -129,6 +133,203 @@ export async function callback(github, runtimeConfig, issueNumber, assignmentId,
   );
 }
 
+
+const CAPACITY_MARKER = "agenti-capacity:v1";
+const BILLING_SAFETY_MARKER = "agenti-billing-safety:v1";
+
+function trustedRoutingPayloads(comments, marker) {
+  return comments
+    .filter(
+      (comment) =>
+        isTrustedActionsActor(comment) &&
+        comment.body?.includes(marker)
+    )
+    .map((comment) => parseMachinePayload(comment.body, marker))
+    .filter(Boolean);
+}
+
+function releaseTargetDigest(github, runtime) {
+  return digest({
+    repository: github.repository,
+    target_branch: runtime.runtimeConfig.default_branch,
+    operations: runtime.projectProfile.publication.boundary_operations
+  });
+}
+
+async function currentMutableEvidence(github, binding) {
+  if (!binding || !("object_id" in binding)) return { current: true };
+  let comment;
+  try {
+    comment = await github.getIssueComment(binding.object_id);
+  } catch (error) {
+    if (String(error.message).includes("failed 404")) {
+      return { current: false, reason: "EVIDENCE_DELETED" };
+    }
+    throw error;
+  }
+  if (
+    binding.actor_id !== undefined &&
+    Number(comment.user?.id) !== Number(binding.actor_id)
+  ) {
+    return { current: false, reason: "EVIDENCE_ACTOR_CHANGED" };
+  }
+  if (
+    binding.updated_at &&
+    comment.updated_at !== binding.updated_at
+  ) {
+    return { current: false, reason: "EVIDENCE_CHANGED" };
+  }
+  return { current: true };
+}
+
+async function requiredChecksCurrent(github, profile, state) {
+  const required = profile.required_checks ?? [];
+  if (required.length === 0) return { current: true };
+  const member = state.candidate?.members?.[0];
+  if (!member?.head_sha) return { current: false, reason: "CANDIDATE_HEAD_MISSING" };
+  const runs = await github.getChecksForRef(member.head_sha);
+  for (const name of required) {
+    const matches = runs
+      .filter((run) => run.name === name)
+      .sort((a, b) => Number(b.id ?? 0) - Number(a.id ?? 0));
+    const latest = matches[0];
+    if (
+      !latest ||
+      latest.status !== "completed" ||
+      latest.conclusion !== "success" ||
+      (latest.head_sha && latest.head_sha !== member.head_sha)
+    ) {
+      return { current: false, reason: "REQUIRED_CHECK_NOT_CURRENT:" + name };
+    }
+  }
+  return { current: true };
+}
+
+export async function preClaimCurrentness({
+  github,
+  runtime,
+  state,
+  assignment,
+  comments,
+  observedAt = new Date().toISOString()
+}) {
+  if (!state?.assignment) return { current: false, reason: "ASSIGNMENT_MISSING" };
+  if (state.lifecycle === "STOPPED") return { current: false, reason: "WORK_ITEM_STOPPED" };
+  if (
+    state.material_operation?.status === "PREPARED" ||
+    state.material_operation?.status === "HUMAN_ACTION_REQUIRED"
+  ) {
+    return {
+      current: false,
+      reason: "MATERIAL_OPERATION_RECONCILIATION_REQUIRED"
+    };
+  }
+  if (
+    (state.human_requests?.active ?? []).some(
+      (request) => request.status === "PENDING"
+    )
+  ) {
+    return { current: false, reason: "HUMAN_INPUT_PENDING" };
+  }
+
+  const issue = await github.getIssue(state.work_item.issue_number);
+  if (digest(issue.body ?? "") !== state.contract.digest) {
+    return { current: false, reason: "CONTRACT_DRIFT_BEFORE_CLAIM", issue };
+  }
+
+  if (state.candidate?.kind === "single") {
+    const member = state.candidate.members?.[0];
+    if (!member?.pr_number || !member?.head_sha) {
+      return { current: false, reason: "CANDIDATE_BINDING_INCOMPLETE", issue };
+    }
+    const pull = await github.getPull(member.pr_number);
+    if (pull.head?.sha !== member.head_sha) {
+      return { current: false, reason: "CANDIDATE_HEAD_DRIFT_BEFORE_CLAIM", issue, pull };
+    }
+    if (
+      member.base_ref_or_sha &&
+      member.base_ref_or_sha !== pull.base?.sha &&
+      member.base_ref_or_sha !== pull.base?.ref
+    ) {
+      return { current: false, reason: "CANDIDATE_BASE_DRIFT_BEFORE_CLAIM", issue, pull };
+    }
+  }
+
+  if (assignment.execution_route) {
+    const capacity = trustedRoutingPayloads(comments, CAPACITY_MARKER);
+    const billing = trustedRoutingPayloads(comments, BILLING_SAFETY_MARKER);
+    let selection;
+    try {
+      selection = selectRunnerCandidate({
+        profile: runtime.projectProfile,
+        role: assignment.role,
+        purpose: assignment.purpose,
+        capability_profile: assignment.capability_profile,
+        semantic_work_digest: assignment.semantic_work_digest,
+        capacity_observations: capacity,
+        billing_safety_observations: billing,
+        routing_attempt_generation:
+          assignment.execution_route.routing_attempt_generation ?? 0,
+        observed_at: observedAt
+      });
+    } catch (error) {
+      return {
+        current: false,
+        reason: "ROUTING_CURRENTNESS_ERROR:" + String(error.message ?? error),
+        issue
+      };
+    }
+    if (selection.kind !== "SELECTED") {
+      return { current: false, reason: "ROUTE_NOT_CURRENT", issue };
+    }
+    if (digest(selection.execution_route) !== digest(assignment.execution_route)) {
+      return { current: false, reason: "ROUTE_CHANGED_BEFORE_CLAIM", issue };
+    }
+  }
+
+  if (assignment.role === "P") {
+    if (
+      runtime.projectProfile.release_authorization?.required &&
+      state.release_authorization?.status !== "GRANTED"
+    ) {
+      return { current: false, reason: "RELEASE_AUTHORIZATION_NOT_CURRENT", issue };
+    }
+    if (
+      state.release_authorization?.candidate_digest &&
+      state.release_authorization.candidate_digest !== state.candidate?.digest
+    ) {
+      return { current: false, reason: "RELEASE_CANDIDATE_DRIFT", issue };
+    }
+    if (
+      state.release_authorization?.target_digest &&
+      state.release_authorization.target_digest !==
+        releaseTargetDigest(github, runtime)
+    ) {
+      return { current: false, reason: "RELEASE_TARGET_DRIFT", issue };
+    }
+    const checks = await requiredChecksCurrent(
+      github,
+      runtime.projectProfile,
+      state
+    );
+    if (!checks.current) return { ...checks, issue };
+
+    const responseCurrent = await currentMutableEvidence(
+      github,
+      state.release_authorization?.response_ref
+    );
+    if (!responseCurrent.current) {
+      return {
+        current: false,
+        reason: "RELEASE_EVIDENCE_" + responseCurrent.reason,
+        issue
+      };
+    }
+  }
+
+  return { current: true, issue };
+}
+
 export async function prepareRun({ role, issueNumber, assignmentId, outDir = ".agenti-run" }) {
   const github = githubClientFromEnv();
   const runtime = await loadRuntime();
@@ -150,6 +351,19 @@ export async function prepareRun({ role, issueNumber, assignmentId, outDir = ".a
   const assignment = assignmentFromState(state, runtime.projectProfile);
   const assignmentErrors = validateSchema(assignment, runtime.assignmentSchema);
   if (assignmentErrors.length) throw new Error("Assignment schema invalid: " + assignmentErrors.join("; "));
+
+  const preCurrent = await preClaimCurrentness({
+    github,
+    runtime,
+    state,
+    assignment,
+    comments: loaded.comments
+  });
+  if (!preCurrent.current) {
+    await writeOutput("skip", "true");
+    await writeOutput("claim_reason", preCurrent.reason);
+    return { skip: true, reason: preCurrent.reason };
+  }
 
   const executionInstanceId = "exec-" + randomUUID();
   if (role === "R" && assignment.independence.must_differ_from_execution_instances.includes(executionInstanceId)) {
@@ -221,7 +435,56 @@ export async function prepareRun({ role, issueNumber, assignmentId, outDir = ".a
   );
   const claimGrant = acquired.grant;
 
-  const issue = await github.getIssue(issueNumber);
+  const claimed = await loadState(
+    github,
+    issueNumber,
+    runtime.workflowStateSchema
+  );
+  const claimCheck = verifyActiveClaim({
+    state: claimed.state,
+    assignmentId: assignment.assignment_id,
+    claimId: claimGrant.claim_id,
+    claimGeneration: claimGrant.claim_generation,
+    executionInstanceId
+  });
+  if (!claimCheck.valid) {
+    await writeOutput("skip", "true");
+    await writeOutput("claim_reason", claimCheck.reason);
+    return { skip: true, reason: claimCheck.reason };
+  }
+
+  const postAssignment = assignmentFromState(
+    claimed.state,
+    runtime.projectProfile
+  );
+  const postCurrent = await preClaimCurrentness({
+    github,
+    runtime,
+    state: claimed.state,
+    assignment: postAssignment,
+    comments: claimed.comments
+  });
+  if (!postCurrent.current) {
+    const revoked = terminalizeClaim({
+      state: claimed.state,
+      terminalReason: "REVOKED_DRIFT",
+      durableEvidenceRef: "pre-provider-currentness:" + postCurrent.reason
+    }).state;
+    await saveStateCAS(
+      github,
+      issueNumber,
+      revoked,
+      runtime.workflowStateSchema,
+      claimed.comment,
+      claimed.state.state_version,
+      claimed.state.claim_control?.claim_version ?? 0
+    );
+    await writeOutput("skip", "true");
+    await writeOutput("claim_reason", postCurrent.reason);
+    return { skip: true, reason: postCurrent.reason };
+  }
+
+  const issue = postCurrent.issue;
   await mkdir(outDir, { recursive: true });
   await writeFile(outDir + "/assignment.json", JSON.stringify(assignment, null, 2));
   await writeFile(outDir + "/run-context.json", JSON.stringify({ attestation, claim_grant: claimGrant }, null, 2));
