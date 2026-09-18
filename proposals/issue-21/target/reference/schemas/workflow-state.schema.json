@@ -62,12 +62,13 @@
     "assignment": {
       "type": ["object", "null"],
       "additionalProperties": false,
-      "required": ["assignment_id", "role", "purpose", "issued_from_state_version", "fingerprint", "capability_profile", "dispatch_status"],
+      "required": ["assignment_id", "role", "purpose", "issued_from_state_version", "bound_state_version", "fingerprint", "capability_profile", "dispatch_status"],
       "properties": {
         "assignment_id": { "type": "string", "minLength": 12 },
         "role": { "enum": ["A", "D", "R", "P"] },
         "purpose": { "type": "string", "minLength": 1 },
         "issued_from_state_version": { "type": "integer", "minimum": 0 },
+        "bound_state_version": { "type": "integer", "minimum": 0 },
         "fingerprint": { "$ref": "#/$defs/digest" },
         "capability_profile": { "enum": ["A_READ_ANALYZE", "D_WORKSPACE_WRITE", "R_READ_REVIEW", "P_PUBLISH"] },
         "dispatch_status": { "enum": ["pending", "dispatched", "running", "completed", "stale"] },
@@ -135,11 +136,14 @@
     "release_authorization": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "candidate_digest", "target_digest", "request_ref", "response_ref"],
+      "required": ["status", "authorization_id", "candidate_digest", "target_digest", "gate_digest", "context_digest", "request_ref", "response_ref"],
       "properties": {
         "status": { "enum": ["NOT_REQUIRED", "PENDING", "GRANTED", "REJECTED", "STALE"] },
+        "authorization_id": { "type": ["string", "null"], "minLength": 1 },
         "candidate_digest": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
         "target_digest": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+        "gate_digest": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+        "context_digest": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
         "request_ref": { "oneOf": [{ "$ref": "#/$defs/evidenceRef" }, { "type": "null" }] },
         "response_ref": { "oneOf": [{ "$ref": "#/$defs/evidenceRef" }, { "type": "null" }] },
         "human_actor_id": { "type": ["integer", "null"], "minimum": 1 }
