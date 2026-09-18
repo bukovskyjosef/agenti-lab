@@ -18,6 +18,7 @@ import {
   assignmentFromState,
   callback,
   loadRuntime,
+  preClaimCurrentness,
   sanitizeProposal
 } from "./runner.mjs";
 
@@ -80,20 +81,43 @@ export async function writeCandidate({
     executionInstanceId: runContext.attestation?.execution_instance_id
   });
   if (!claimCheck.valid) throw new Error("D_WRITE_CLAIM_NOT_CURRENT: " + claimCheck.reason);
+
+  const writerCurrent = await preClaimCurrentness({
+    github,
+    runtime,
+    state,
+    assignment,
+    comments: loaded.comments
+  });
+  if (!writerCurrent.current) {
+    throw new Error("D_WRITE_CURRENTNESS_FAILED: " + writerCurrent.reason);
+  }
+  if (writerCurrent.target_digest !== claimGrant.binding.target_digest) {
+    throw new Error("D_WRITE_TARGET_BINDING_DRIFT");
+  }
+
   const patchBytes = await readFile(patchPath);
   if (patchBytes.length === 0) throw new Error("D produced no change artifact");
 
   const branch = deterministicBranch(issueNumber);
-  const baseRef = assignment.candidate.kind === "single" && assignment.candidate.members[0]?.head_sha
-    ? assignment.candidate.members[0].head_sha
-    : runtime.runtimeConfig.default_branch;
+  const baseRef =
+    assignment.candidate.kind === "single" &&
+    assignment.candidate.members[0]?.head_sha
+      ? assignment.candidate.members[0].head_sha
+      : writerCurrent.target_binding?.base_sha;
+  if (!baseRef) throw new Error("D_WRITE_IMMUTABLE_BASE_MISSING");
   const materialOperation = materialOperationId({
     state,
     claimId: claimGrant.claim_id,
     claimGeneration: claimGrant.claim_generation,
     assignmentId: assignment.assignment_id,
     operationKind: "D_CANDIDATE_REF_WRITE",
-    targetBinding: { branch, base_ref: baseRef, patch_sha256: sha256File(patchBytes) }
+    targetBinding: {
+      branch,
+      base_ref: baseRef,
+      claim_target_digest: claimGrant.binding.target_digest,
+      patch_sha256: sha256File(patchBytes)
+    }
   });
 
   sh("git", ["fetch", "--no-tags", "origin", baseRef]);
