@@ -1,12 +1,15 @@
 import { readFile } from "node:fs/promises";
 import {
   digest,
-  materialOperationId,
   normalizeRoleResult,
   verifyActiveClaim,
   verifyAcceptedEvidence
 } from "../core/index.mjs";
 import { githubClientFromEnv } from "./github.mjs";
+import {
+  prepareDurableMaterialOperation,
+  resolveDurableMaterialOperation
+} from "./material-operation.mjs";
 import {
   ROLE_RESULT_MARKER,
   loadState,
@@ -207,20 +210,27 @@ export async function publishCurrent({ issueNumber, assignmentId, contextPath = 
     throw new Error("Default single-repo publisher supports configured MERGE only");
   }
 
-  const materialOperation = materialOperationId({
+  const targetBinding = {
+    repository: github.repository,
+    pr_number: pull.number,
+    expected_head: state.candidate.members[0].head_sha,
+    target_branch: runtime.runtimeConfig.default_branch,
+    claim_target_digest: claimGrant.binding.target_digest
+  };
+  const preparedMaterial = await prepareDurableMaterialOperation({
+    github,
+    runtime,
+    loaded,
     state,
-    claimId: claimGrant.claim_id,
-    claimGeneration: claimGrant.claim_generation,
-    assignmentId,
+    assignment,
+    claimGrant,
+    executionInstanceId:
+      runContext.attestation?.execution_instance_id,
     operationKind: "P_MERGE",
-    targetBinding: {
-      repository: github.repository,
-      pr_number: pull.number,
-      expected_head: state.candidate.members[0].head_sha,
-      target_branch: runtime.runtimeConfig.default_branch,
-      claim_target_digest: claimGrant.binding.target_digest
-    }
+    targetBinding
   });
+  const materialOperation =
+    preparedMaterial.material_operation.material_operation_id;
 
   const merge = await github.mergePull(pull.number, {
     sha: state.candidate.members[0].head_sha,
@@ -228,6 +238,15 @@ export async function publishCurrent({ issueNumber, assignmentId, contextPath = 
     commit_title: "agenti: publish #" + issueNumber
   });
   if (!merge?.merged || !merge.sha) throw new Error("MERGE_FAILED: " + JSON.stringify(merge));
+
+  await resolveDurableMaterialOperation({
+    github,
+    runtime,
+    issueNumber,
+    materialOperationId: materialOperation,
+    outcome: "APPLIED",
+    evidenceRef: "merge-commit:" + merge.sha
+  });
 
   const proposal = {
     role: "P",
