@@ -64,6 +64,8 @@ export function routingEvidenceSnapshot({
     const current = trustedPayloads(comments, EXECUTION_FAILURE_MARKER)
       .filter(({ payload }) =>
         payload.failure?.failed_assignment_id === state.assignment.assignment_id &&
+        payload.failure?.claim_id === state.claim_control?.active_claim?.claim_id &&
+        payload.failure?.claim_generation === state.claim_control?.active_claim?.claim_generation &&
         payload.failure?.semantic_work_digest ===
           state.assignment.semantic_work_digest
       )
