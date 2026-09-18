@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenti.local/schemas/material-operation.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "material_operation_id",
+    "status",
+    "claim_id",
+    "claim_generation",
+    "assignment_id",
+    "operation_kind",
+    "target_binding",
+    "prepared_at",
+    "evidence_ref"
+  ],
+  "properties": {
+    "material_operation_id": {
+      "type": "string",
+      "pattern": "^mop-"
+    },
+    "status": {
+      "enum": [
+        "PREPARED",
+        "APPLIED",
+        "NOT_APPLIED",
+        "HUMAN_ACTION_REQUIRED"
+      ]
+    },
+    "claim_id": {
+      "type": "string",
+      "pattern": "^clm-"
+    },
+    "claim_generation": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "assignment_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "operation_kind": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target_binding": {
+      "type": "object"
+    },
+    "prepared_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "evidence_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}
