@@ -208,11 +208,13 @@ function billingEligibility({
   }
 
   if (mode === "INCLUDED_ALLOWANCE") {
-    if (policy.paid_execution?.mode !== "FORBIDDEN") {
+    // INCLUDED_ALLOWANCE is a strict no-incremental-spend class.
+    // Paid overflow must be represented as a separate PREPAID/METERED
+    // candidate with its own explicit paid authority and hard limit.
+    if (billing.incremental_paid_usage) {
       return {
-        eligible: true,
-        safety: null,
-        paid_authority_digest: digest(policy.paid_execution)
+        eligible: false,
+        reason: "INCLUDED_ALLOWANCE_PAID_SPILLOVER_DECLARATION_INVALID"
       };
     }
 
@@ -235,6 +237,9 @@ function billingEligibility({
           : "BILLING_SAFETY_UNKNOWN"
       };
     }
+
+    // Changing the policy to ALLOWED_WITH_BUDGET does not convert this
+    // included candidate into paid authority. Any paid route is separate.
     return { eligible: true, safety, paid_authority_digest: null };
   }
 
@@ -507,6 +512,13 @@ export function routingWaitDue(executionRouting, observedAt) {
   return due !== null && due <= nowMs(observedAt);
 }
 
+export function routingWaitDeadlineReached(executionRouting, observedAt) {
+  const wait = executionRouting?.wait;
+  if (!wait || wait.status !== "WAITING_CAPACITY") return false;
+  const deadline = parsedTime(wait.max_wait_deadline);
+  return deadline !== null && deadline <= nowMs(observedAt);
+}
+
 export function validateRoutingConfiguration(profile) {
   const errors = [];
   const routing = profile?.execution_routing;
@@ -571,12 +583,21 @@ export function validateRoutingConfiguration(profile) {
 
       if (
         candidate.billing?.mode === "INCLUDED_ALLOWANCE" &&
-        policy.paid_execution?.mode === "FORBIDDEN" &&
         !candidate.billing_safety
       ) {
         errors.push(
-          "policy " + policy.policy_id + " strict included candidate " +
+          "policy " + policy.policy_id + " included candidate " +
           candidateId + " requires billing_safety configuration"
+        );
+      }
+      if (
+        candidate.billing?.mode === "INCLUDED_ALLOWANCE" &&
+        candidate.billing?.incremental_paid_usage
+      ) {
+        errors.push(
+          "policy " + policy.policy_id + " included candidate " +
+          candidateId +
+          " cannot declare incremental_paid_usage; model paid overflow as a separate paid candidate"
         );
       }
       if (
