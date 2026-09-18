@@ -240,6 +240,8 @@ export async function finalizeRun({ role, issueNumber, assignmentId, proposalPat
     observed_state_version: assignment.state.version,
     observed_fingerprint: assignment.state.fingerprint,
     execution_attestation: runContext.attestation,
+    actual_billing_mode:
+      assignment.execution_route?.billing_mode ?? null,
     candidate: role === "R" && state.candidate.kind === "single"
       ? {
           repository: state.candidate.members[0].repository,
