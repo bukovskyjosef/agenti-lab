@@ -21,7 +21,9 @@
     "run_receipts",
     "failure",
     "stop",
-    "updated_by"
+    "updated_by",
+    "claim_control",
+    "material_operation"
   ],
   "properties": {
     "schema_version": {
@@ -648,6 +650,39 @@
     },
     "execution_routing": {
       "$ref": "#/$defs/executionRouting"
+    },
+    "claim_control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_version",
+        "active_claim",
+        "last_terminal"
+      ],
+      "properties": {
+        "claim_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "active_claim": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "last_terminal": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "material_operation": {
+      "type": [
+        "object",
+        "null"
+      ]
     }
   },
   "$defs": {
