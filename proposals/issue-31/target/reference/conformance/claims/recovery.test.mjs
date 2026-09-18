@@ -164,3 +164,28 @@ test("manual H recovery is exact claim, actor and reason bound", () => {
     "issue-comment:900"
   );
 });
+
+test("platform auto-recovery is blocked while material outcome is unresolved", () => {
+  const claimed = state("PLATFORM_RUN");
+  const active = claimed.claim_control.active_claim;
+  claimed.material_operation = {
+    material_operation_id: "mop-test",
+    status: "PREPARED",
+    claim_id: active.claim_id,
+    claim_generation: active.claim_generation,
+    assignment_id: claimed.assignment.assignment_id,
+    operation_kind: "D_CANDIDATE_REF_WRITE",
+    target_binding: { repository: "example/product" },
+    prepared_at: "2026-09-18T20:01:00Z",
+    evidence_ref: null
+  };
+  const decision = platformRunRecoveryDecision({
+    state: claimed,
+    run: { id: 555, status: "completed", conclusion: "failure" }
+  });
+  assert.equal(decision.eligible, false);
+  assert.equal(
+    decision.reason,
+    "MATERIAL_OPERATION_RECONCILIATION_REQUIRED"
+  );
+});
