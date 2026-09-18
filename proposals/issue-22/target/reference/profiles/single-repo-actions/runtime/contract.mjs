@@ -17,10 +17,6 @@ const SECTION_HEADINGS = Object.freeze({
   RELEASE_POLICY: "Release policy"
 });
 
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&");
-}
-
 function stringifyValue(value) {
   if (typeof value === "string") return value.trim();
   if (Array.isArray(value)) return value.map((item) => "- " + (typeof item === "string" ? item : JSON.stringify(item))).join("\n");
@@ -28,18 +24,43 @@ function stringifyValue(value) {
   return JSON.stringify(value, null, 2);
 }
 
+function sectionRange(body, heading) {
+  const lines = body.split("\n");
+  const wanted = "## " + heading.toLowerCase();
+  let start = -1;
+  for (let index = 0; index < lines.length; index += 1) {
+    if (lines[index].trim().toLowerCase() === wanted) {
+      start = index;
+      break;
+    }
+  }
+  if (start < 0) return null;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^##\s+/.test(lines[index])) {
+      end = index;
+      break;
+    }
+  }
+  return { lines, start, end };
+}
+
 export function sectionContent(body, heading) {
-  const re = new RegExp("^##\\s+" + escapeRegExp(heading) + "\\s*$([\\s\\S]*?)(?=^##\\s+|$)", "mi");
-  const match = body.match(re);
-  return match ? match[1].trim() : "";
+  const range = sectionRange(body, heading);
+  if (!range) return "";
+  return range.lines.slice(range.start + 1, range.end).join("\n").trim();
 }
 
 export function setSection(body, heading, value) {
   const text = stringifyValue(value);
-  const re = new RegExp("(^##\\s+" + escapeRegExp(heading) + "\\s*$)[\\s\\S]*?(?=^##\\s+|$)", "mi");
-  const replacement = "## " + heading + "\n\n" + text + "\n\n";
-  if (re.test(body)) return body.replace(re, replacement);
-  return body.trimEnd() + "\n\n" + replacement;
+  const range = sectionRange(body, heading);
+  if (!range) return body.trimEnd() + "\n\n## " + heading + "\n\n" + text + "\n";
+  const replacement = ["## " + heading, "", text, ""];
+  return [
+    ...range.lines.slice(0, range.start),
+    ...replacement,
+    ...range.lines.slice(range.end)
+  ].join("\n");
 }
 
 export function applyContractOperations(body, operations, expectedDigest, actualDigest) {
