@@ -22,6 +22,15 @@ export function platformRunRecoveryDecision({
   if (roleResultPresent) {
     return { eligible: false, reason: "APPLICABLE_RESULT_EXISTS" };
   }
+  if (
+    state.material_operation?.claim_id === claim.claim_id &&
+    !["NOT_APPLIED"].includes(state.material_operation.status)
+  ) {
+    return {
+      eligible: false,
+      reason: "MATERIAL_OPERATION_RECONCILIATION_REQUIRED"
+    };
+  }
   const boundRunId = claim.owner?.platform_run_id;
   if (!boundRunId) return { eligible: false, reason: "PLATFORM_RUN_ID_MISSING" };
   if (!run || String(run.id) !== String(boundRunId)) {
