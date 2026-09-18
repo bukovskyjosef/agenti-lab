@@ -186,6 +186,7 @@ export async function prepareRun({ role, issueNumber, assignmentId, outDir = ".a
   await writeFile(outDir + "/assignment.json", JSON.stringify(assignment, null, 2));
   await writeFile(outDir + "/run-context.json", JSON.stringify({ attestation, claim_comment_id: claim.id }, null, 2));
   await writeFile(outDir + "/work-item.md", issue.body ?? "");
+  await writeFile(outDir + "/comments.json", JSON.stringify(loaded.comments, null, 2));
 
   await writeOutput("skip", "false");
   await writeOutput("claim_comment_id", claim.id);
