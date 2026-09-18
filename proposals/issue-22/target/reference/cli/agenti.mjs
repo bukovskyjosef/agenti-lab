@@ -326,9 +326,11 @@ async function setupGithub(targetRoot) {
     gh(["label", "create", label, "--force", "--color", labelColors[label], "--description", "Agenti runtime projection label"]);
   }
 
+  const requiredSecret = runtime.runner.secret_name;
+  gh(["variable", "set", "AGENTI_CODEX_SECRET_NAME", "--body", requiredSecret]);
+
   const secrets = gh(["secret", "list", "--json", "name"]);
   const secretNames = new Set(JSON.parse(secrets).map((item) => item.name));
-  const requiredSecret = runtime.runner.secret_name;
   if (!secretNames.has(requiredSecret)) {
     throw new Error("Required provider secret metadata is missing: " + requiredSecret + ". Configure it with gh secret set " + requiredSecret);
   }
@@ -349,6 +351,7 @@ async function setupGithub(targetRoot) {
   console.log("- default branch: " + runtime.default_branch);
   console.log("- H principal: " + profile.human.principals[0].login + " (" + profile.human.principals[0].actor_id + ")");
   console.log("- provider secret metadata present: " + requiredSecret);
+  console.log("- repository variable AGENTI_CODEX_SECRET_NAME configured");
   console.log("- labels/workflows verified");
 }
 
