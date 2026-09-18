@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenti.dev/schemas/project-profile.schema.json",
+  "title": "Agenti Project Profile core contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "runtime_version",
+    "repository_topology",
+    "control_repository",
+    "human",
+    "role_runners",
+    "independent_r_enforcement",
+    "identities",
+    "release_authorization",
+    "publication",
+    "state_projection"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "runtime_version": { "type": "string", "minLength": 1 },
+    "repository_topology": { "enum": ["single-repo", "multi-repo"] },
+    "control_repository": { "$ref": "#/$defs/repository" },
+    "implementation_repositories": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/repository" },
+      "uniqueItems": true
+    },
+    "human": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principals"],
+      "properties": {
+        "principals": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["actor_id"],
+            "properties": {
+              "actor_id": { "type": "integer", "minimum": 1 },
+              "login": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "semantic_authority_map": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fact_domain", "source_ref"],
+        "properties": {
+          "fact_domain": { "type": "string", "minLength": 1 },
+          "source_ref": { "type": "string", "minLength": 1 },
+          "currentness": { "enum": ["current", "derived", "effective-evidence", "historical"] }
+        }
+      }
+    },
+    "required_checks": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "role_runners": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["A", "D", "R", "P"],
+      "properties": {
+        "A": { "$ref": "#/$defs/runner" },
+        "D": { "$ref": "#/$defs/runner" },
+        "R": { "$ref": "#/$defs/reviewerRunner" },
+        "P": { "$ref": "#/$defs/runner" }
+      }
+    },
+    "independent_r_enforcement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mechanisms"],
+      "properties": {
+        "mechanisms": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["attestation_source", "fresh_execution_required"],
+            "properties": {
+              "attestation_source": { "const": "deterministic-wrapper" },
+              "fresh_execution_required": { "type": "boolean" },
+              "trusted_platform_fields": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "uniqueItems": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "identities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["O", "P"],
+      "properties": {
+        "O": { "$ref": "#/$defs/identity" },
+        "P": { "$ref": "#/$defs/identity" }
+      }
+    },
+    "release_authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "target": { "type": "string" }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["boundary_operations"],
+      "properties": {
+        "boundary_operations": {
+          "type": "array",
+          "items": { "enum": ["MERGE", "PROMOTE", "TAG", "RELEASE", "DEPLOY", "OTHER_CONFIGURED"] },
+          "uniqueItems": true
+        }
+      }
+    },
+    "state_projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["marker", "single_writer"],
+      "properties": {
+        "marker": { "const": "agenti-state:v1" },
+        "single_writer": { "const": "O" }
+      }
+    }
+  },
+  "$defs": {
+    "repository": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter_id", "adapter_version", "capability_profile"],
+      "properties": {
+        "adapter_id": { "type": "string", "minLength": 1 },
+        "adapter_version": { "type": "string", "minLength": 1 },
+        "capability_profile": { "enum": ["A_READ_ANALYZE", "D_WORKSPACE_WRITE", "R_READ_REVIEW", "P_PUBLISH"] }
+      }
+    },
+    "reviewerRunner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter_id", "adapter_version", "capability_profile", "independence_mechanism"],
+      "properties": {
+        "adapter_id": { "type": "string", "minLength": 1 },
+        "adapter_version": { "type": "string", "minLength": 1 },
+        "capability_profile": { "const": "R_READ_REVIEW" },
+        "independence_mechanism": { "type": "string", "minLength": 1 }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity_id", "capability_profile", "permissions"],
+      "properties": {
+        "identity_id": { "type": "string", "minLength": 1 },
+        "capability_profile": { "enum": ["O_CONTROL_PLANE", "P_PUBLISH"] },
+        "dispatch_mechanism": { "enum": ["workflow_dispatch", "none"] },
+        "permissions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "metadata": { "enum": ["read", "write", "none"] },
+            "contents": { "enum": ["read", "write", "none"] },
+            "issues": { "enum": ["read", "write", "none"] },
+            "pull_requests": { "enum": ["read", "write", "none"] },
+            "checks": { "enum": ["read", "write", "none"] },
+            "actions": { "enum": ["read", "write", "none"] },
+            "deployments": { "enum": ["read", "write", "none"] }
+          }
+        }
+      }
+    }
+  }
+}

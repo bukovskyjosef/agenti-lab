@@ -1,0 +1,349 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenti.dev/schemas/role-result.schema.json",
+  "title": "Agenti normalized discriminated role result",
+  "oneOf": [
+    { "$ref": "#/$defs/analystResult" },
+    { "$ref": "#/$defs/developerResult" },
+    { "$ref": "#/$defs/reviewerResult" },
+    { "$ref": "#/$defs/publisherResult" }
+  ],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "evidence": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["evidence_kind", "repository", "object_id", "actor_id", "accepted_revision", "payload_digest", "normalized_outcome", "context_binding"],
+          "properties": {
+            "evidence_kind": { "enum": ["issue_comment", "pr_review", "review_comment", "role_result_comment", "publication_comment", "other_mutable"] },
+            "repository": { "type": "string", "minLength": 3 },
+            "object_id": { "type": ["string", "integer"] },
+            "actor_id": { "type": "integer", "minimum": 1 },
+            "accepted_revision": { "type": "string", "minLength": 1 },
+            "payload_digest": { "$ref": "#/$defs/digest" },
+            "normalized_outcome": { "type": "string", "minLength": 1 },
+            "context_binding": { "$ref": "#/$defs/digest" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["evidence_kind", "repository", "immutable_id"],
+          "properties": {
+            "evidence_kind": { "enum": ["commit", "artifact", "deployment", "release", "check_run", "other_immutable"] },
+            "repository": { "type": "string", "minLength": 3 },
+            "immutable_id": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter_id", "adapter_version", "execution_instance_id", "platform_run", "provider_session", "issued_for_assignment", "attested_by"],
+      "properties": {
+        "adapter_id": { "type": "string", "minLength": 1 },
+        "adapter_version": { "type": "string", "minLength": 1 },
+        "execution_instance_id": { "type": "string", "minLength": 8 },
+        "platform_run": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider", "run_id", "run_attempt"],
+          "properties": {
+            "provider": { "enum": ["github-actions", "external"] },
+            "run_id": { "type": ["string", "integer"] },
+            "run_attempt": { "type": "integer", "minimum": 1 },
+            "job_or_worker_id": { "type": ["string", "null"] }
+          }
+        },
+        "provider_session": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "provider_session_id"],
+          "properties": {
+            "mode": { "enum": ["fresh", "resumed"] },
+            "provider_session_id": { "type": ["string", "null"] }
+          }
+        },
+        "issued_for_assignment": { "type": "string", "minLength": 1 },
+        "attested_by": { "const": "deterministic-wrapper" }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "pr_number", "head_sha", "base_ref_or_sha", "candidate_digest"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 3 },
+        "pr_number": { "type": "integer", "minimum": 1 },
+        "head_sha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "base_ref_or_sha": { "type": "string", "minLength": 1 },
+        "candidate_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "trusted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assignment_id", "observed_state_version", "observed_fingerprint", "execution_attestation"],
+      "properties": {
+        "assignment_id": { "type": "string", "minLength": 1 },
+        "observed_state_version": { "type": "integer", "minimum": 0 },
+        "observed_fingerprint": { "$ref": "#/$defs/digest" },
+        "execution_attestation": { "$ref": "#/$defs/attestation" },
+        "candidate": { "oneOf": [{ "$ref": "#/$defs/candidate" }, { "type": "null" }] }
+      }
+    },
+    "common": {
+      "type": "object",
+      "required": ["schema_version", "role", "status", "result_type", "trusted", "evidence_refs", "result_digest", "payload"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "role": { "enum": ["A", "D", "R", "P"] },
+        "status": { "enum": ["COMPLETED", "BLOCKED", "FAILED"] },
+        "result_type": { "enum": ["ANALYST", "DEVELOPER", "REVIEWER", "PUBLISHER"] },
+        "trusted": { "$ref": "#/$defs/trusted" },
+        "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+        "human_request": { "type": ["object", "null"] },
+        "retry_or_failure": { "type": ["object", "null"] },
+        "result_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "contractOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "section", "value", "precondition_contract_digest"],
+      "properties": {
+        "op": { "const": "SET_SECTION" },
+        "section": {
+          "enum": [
+            "GOAL", "CONTEXT", "SCOPE", "OUT_OF_SCOPE", "REQUIREMENTS",
+            "ACCEPTANCE_CRITERIA", "CONSTRAINTS", "DEPENDENCIES",
+            "CANONICAL_REFERENCES", "REQUIRED_CONTROL_GATES", "VALIDATION",
+            "DOCUMENTATION_IMPACT", "CONCURRENCY_CLASS", "SHARED_SURFACES",
+            "DECISION_GATES", "RELEASE_POLICY"
+          ]
+        },
+        "value": {},
+        "precondition_contract_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "analystPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_contract_digest", "disposition", "contract_operations", "blockers"],
+      "properties": {
+        "base_contract_digest": { "$ref": "#/$defs/digest" },
+        "disposition": { "enum": ["READY", "HUMAN_INPUT_REQUIRED", "ANALYSIS_CONTINUES", "BLOCKED"] },
+        "contract_operations": { "type": "array", "items": { "$ref": "#/$defs/contractOperation" } },
+        "decomposition": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "parent_overall_completion_condition": {},
+            "children": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["child_key", "title", "inherited_parent_inputs", "contract_sections"],
+                "properties": {
+                  "child_key": { "type": "string", "minLength": 1 },
+                  "title": { "type": "string", "minLength": 1 },
+                  "inherited_parent_inputs": { "type": "array" },
+                  "contract_sections": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "blockers": { "type": "array" }
+      }
+    },
+    "developerPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["work_contract_digest", "base", "change_artifact", "requested_branch_key", "author_validation", "blockers"],
+      "properties": {
+        "work_contract_digest": { "$ref": "#/$defs/digest" },
+        "base": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "ref_or_sha"],
+          "properties": {
+            "repository": { "type": "string", "minLength": 3 },
+            "ref_or_sha": { "type": "string", "minLength": 1 }
+          }
+        },
+        "change_artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["format", "artifact_ref", "sha256"],
+          "properties": {
+            "format": { "enum": ["unified-diff", "git-bundle", "adapter-defined-allowlisted-format"] },
+            "artifact_ref": { "type": "string", "minLength": 1 },
+            "sha256": { "$ref": "#/$defs/digest" }
+          }
+        },
+        "requested_branch_key": { "type": "string", "minLength": 1 },
+        "author_validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["refs", "summary"],
+          "properties": {
+            "refs": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+            "summary": { "type": "string" }
+          }
+        },
+        "blockers": { "type": "array" }
+      }
+    },
+    "reviewerPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewed_candidate_digest", "reviewed_contract_digest", "outcome", "findings", "correction_owner"],
+      "properties": {
+        "reviewed_candidate_digest": { "$ref": "#/$defs/digest" },
+        "reviewed_contract_digest": { "$ref": "#/$defs/digest" },
+        "outcome": { "enum": ["APPROVED", "CHANGES_REQUIRED", "DECISION_REQUIRED"] },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["finding_id", "severity", "disposition", "summary", "evidence_refs", "affected_binding"],
+            "properties": {
+              "finding_id": { "type": "string", "minLength": 1 },
+              "severity": { "enum": ["BLOCKER", "MAJOR", "MINOR", "NIT"] },
+              "disposition": { "enum": ["DEFECT", "DECISION_REQUIRED", "RECOMMENDATION"] },
+              "summary": { "type": "string", "minLength": 1 },
+              "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+              "affected_binding": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "correction_owner": { "enum": ["A", "D", "H", "NONE"] }
+      }
+    },
+    "publisherPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["consumed_candidate_digest", "target_digest", "publication_status", "operations", "deterministic_verification_refs"],
+      "properties": {
+        "consumed_candidate_digest": { "$ref": "#/$defs/digest" },
+        "target_digest": { "$ref": "#/$defs/digest" },
+        "publication_status": { "enum": ["SUCCEEDED", "PARTIAL", "FAILED", "STALE"] },
+        "operations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["operation", "status", "target"],
+            "properties": {
+              "operation": { "enum": ["MERGE", "PROMOTE", "TAG", "RELEASE", "DEPLOY", "OTHER_CONFIGURED"] },
+              "status": { "enum": ["SUCCEEDED", "FAILED", "SKIPPED"] },
+              "immutable_result_id": { "type": ["string", "null"] },
+              "target": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "actual_published_identity": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["repository_or_artifact", "immutable_id"],
+          "properties": {
+            "repository_or_artifact": { "type": "string", "minLength": 1 },
+            "immutable_id": { "type": "string", "minLength": 1 }
+          }
+        },
+        "deterministic_verification_refs": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+        "partial_failure": { "type": ["object", "null"] }
+      }
+    },
+    "analystResult": {
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": { "const": 1 },
+            "role": { "const": "A" },
+            "status": { "enum": ["COMPLETED", "BLOCKED", "FAILED"] },
+            "result_type": { "const": "ANALYST" },
+            "trusted": { "$ref": "#/$defs/trusted" },
+            "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+            "human_request": { "type": ["object", "null"] },
+            "retry_or_failure": { "type": ["object", "null"] },
+            "result_digest": { "$ref": "#/$defs/digest" },
+            "payload": { "$ref": "#/$defs/analystPayload" }
+          }
+        }
+      ]
+    },
+    "developerResult": {
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": { "const": 1 },
+            "role": { "const": "D" },
+            "status": { "enum": ["COMPLETED", "BLOCKED", "FAILED"] },
+            "result_type": { "const": "DEVELOPER" },
+            "trusted": { "$ref": "#/$defs/trusted" },
+            "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+            "human_request": { "type": ["object", "null"] },
+            "retry_or_failure": { "type": ["object", "null"] },
+            "result_digest": { "$ref": "#/$defs/digest" },
+            "payload": { "$ref": "#/$defs/developerPayload" }
+          }
+        }
+      ]
+    },
+    "reviewerResult": {
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": { "const": 1 },
+            "role": { "const": "R" },
+            "status": { "enum": ["COMPLETED", "BLOCKED", "FAILED"] },
+            "result_type": { "const": "REVIEWER" },
+            "trusted": { "$ref": "#/$defs/trusted" },
+            "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+            "human_request": { "type": ["object", "null"] },
+            "retry_or_failure": { "type": ["object", "null"] },
+            "result_digest": { "$ref": "#/$defs/digest" },
+            "payload": { "$ref": "#/$defs/reviewerPayload" }
+          }
+        }
+      ]
+    },
+    "publisherResult": {
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": { "const": 1 },
+            "role": { "const": "P" },
+            "status": { "enum": ["COMPLETED", "BLOCKED", "FAILED"] },
+            "result_type": { "const": "PUBLISHER" },
+            "trusted": { "$ref": "#/$defs/trusted" },
+            "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+            "human_request": { "type": ["object", "null"] },
+            "retry_or_failure": { "type": ["object", "null"] },
+            "result_digest": { "$ref": "#/$defs/digest" },
+            "payload": { "$ref": "#/$defs/publisherPayload" }
+          }
+        }
+      ]
+    }
+  }
+}
