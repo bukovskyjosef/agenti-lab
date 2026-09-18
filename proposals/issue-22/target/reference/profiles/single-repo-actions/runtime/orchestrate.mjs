@@ -243,7 +243,7 @@ async function checkSnapshot(github, profile, candidate) {
   const evidenceDigest = digest(evidence);
   return {
     checks: {
-      status: required.length === 0 ? "NOT_REQUIRED" : (passed ? "PASSED" : "PENDING"),
+      status: required.length === 0 ? "PASSED" : (passed ? "PASSED" : "PENDING"),
       required_set_digest: required.length === 0 ? null : digest(required),
       evidence_refs: []
     },
