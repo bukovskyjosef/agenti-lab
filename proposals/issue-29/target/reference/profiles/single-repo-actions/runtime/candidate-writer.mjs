@@ -136,7 +136,8 @@ export async function writeCandidate({
       candidate: trustedCandidate,
       change_artifact: trustedArtifact,
       author_validation_refs: [],
-      actual_billing_mode: null
+      actual_billing_mode:
+        assignment.execution_route?.billing_mode ?? null
     },
     assignment,
     roleResultSchema: runtime.roleResultSchema
