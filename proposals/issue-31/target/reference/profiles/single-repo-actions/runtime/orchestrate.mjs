@@ -468,8 +468,8 @@ async function ensureAssignmentDispatch(github, runtime, state, comments, issueN
   const assignmentId = state.assignment.assignment_id;
   const result = findRoleResult(comments, assignmentId);
   if (result) return false;
-  const claim = findRunClaim(comments, assignmentId);
-  if (claim) return false;
+  const claim = state.claim_control?.active_claim;
+  if (claim?.assignment_id === assignmentId) return false;
 
   const assignment = assignmentFromState(state, runtime.projectProfile);
   if (!findAssignmentAudit(comments, assignmentId)) {
