@@ -73,6 +73,216 @@ function normalizeHumanRequest(request) {
   return { ...request, status: request.status ?? "PENDING" };
 }
 
+function transitionAssignmentSpec(transitionTable, transitionId) {
+  return transitionTable?.transitions?.find((item) => item.id === transitionId)?.assignment ?? null;
+}
+
+function assignmentProjection(assignment, issuedFromStateVersion) {
+  if (!assignment) return null;
+  return {
+    assignment_id: assignment.assignment_id,
+    role: assignment.role,
+    purpose: assignment.purpose,
+    issued_from_state_version: issuedFromStateVersion,
+    bound_state_version: assignment.state.version,
+    fingerprint: assignment.state.fingerprint,
+    capability_profile: assignment.capability_profile,
+    dispatch_status: "pending",
+    workflow_run_id: null,
+    must_differ_from_execution_instances:
+      assignment.independence?.must_differ_from_execution_instances ?? []
+  };
+}
+
+function invalidationStaleSet(action) {
+  if (Array.isArray(action.stale) && action.stale.length) {
+    return new Set(action.stale);
+  }
+  if (action.earliest_affected_point === "ANALYSIS") {
+    return new Set(["assignment", "review", "release_authorization", "publication"]);
+  }
+  if (action.earliest_affected_point === "IN_REVIEW") {
+    return new Set(["assignment", "review", "release_authorization", "publication"]);
+  }
+  if (action.earliest_affected_point === "APPROVED") {
+    return new Set(["assignment", "release_authorization", "publication"]);
+  }
+  return new Set(["assignment"]);
+}
+
+function recoveryAssignmentSpec({ earliest, profile, transitionTable }) {
+  if (earliest === "ANALYSIS") {
+    return transitionAssignmentSpec(transitionTable, "T01");
+  }
+  if (earliest === "IN_REVIEW") {
+    return transitionAssignmentSpec(transitionTable, "T04");
+  }
+  if (
+    earliest === "APPROVED" &&
+    !profile.release_authorization?.required
+  ) {
+    return transitionAssignmentSpec(transitionTable, "T08");
+  }
+  return null;
+}
+
+function recoveryIndependence({ role, state, profile }) {
+  if (role !== "R") {
+    return {
+      required: false,
+      must_differ_from_execution_instances: [],
+      enforcement_mechanism: "none"
+    };
+  }
+  return {
+    required: true,
+    must_differ_from_execution_instances:
+      state.review?.author_execution_instances ?? [],
+    enforcement_mechanism:
+      profile.role_runners?.R?.independence_mechanism ?? "none"
+  };
+}
+
+export function projectInvalidationState({
+  core,
+  state,
+  action,
+  snapshot,
+  profile,
+  transitionTable,
+  observedAt,
+  oRunId
+}) {
+  if (!state || action?.kind !== "INVALIDATE") {
+    throw new Error("projectInvalidationState requires current state and core INVALIDATE action");
+  }
+
+  const earliest = action.earliest_affected_point;
+  if (!["ANALYSIS", "IN_REVIEW", "APPROVED"].includes(earliest)) {
+    throw new Error(`Unsupported INVALIDATE earliest_affected_point ${earliest}`);
+  }
+
+  const next = structuredClone(state);
+  next.state_version = state.state_version + 1;
+  next.lifecycle = earliest;
+  next.assignment = null;
+
+  if (earliest === "ANALYSIS") {
+    next.contract = {
+      ...next.contract,
+      source_ref: snapshot.contract_source_ref ?? next.contract.source_ref,
+      accepted_revision:
+        snapshot.contract_revision ?? next.contract.accepted_revision,
+      digest: snapshot.contract_digest ?? next.contract.digest
+    };
+  }
+
+  if (
+    snapshot.candidate &&
+    snapshot.candidate.digest !== undefined &&
+    snapshot.candidate.digest !== null &&
+    earliest !== "ANALYSIS"
+  ) {
+    next.candidate = structuredClone(snapshot.candidate);
+  }
+  if (snapshot.checks) next.checks = structuredClone(snapshot.checks);
+
+  const stale = invalidationStaleSet(action);
+
+  if (stale.has("review")) {
+    next.review = {
+      ...next.review,
+      status: action.evidence_status === "INVALID" ? "INVALID" : "STALE",
+      candidate_digest: next.candidate?.digest ?? null,
+      outcome: null,
+      evidence_ref: null
+    };
+  }
+
+  if (stale.has("release_authorization")) {
+    const current = next.release_authorization;
+    if (
+      earliest === "APPROVED" &&
+      profile.release_authorization?.required &&
+      current?.authorization_id
+    ) {
+      next.release_authorization = {
+        ...current,
+        status: "PENDING",
+        response_ref: null,
+        human_actor_id: null
+      };
+    } else if (current?.status !== "NOT_REQUIRED") {
+      next.release_authorization = {
+        ...current,
+        status: "STALE",
+        response_ref: null,
+        human_actor_id: null
+      };
+    }
+  }
+
+  if (
+    stale.has("publication") &&
+    !["NOT_STARTED", "FAILED"].includes(next.publication?.status)
+  ) {
+    next.publication = {
+      ...next.publication,
+      status: "STALE"
+    };
+  }
+
+  const spec = recoveryAssignmentSpec({
+    earliest,
+    profile,
+    transitionTable
+  });
+
+  if (spec?.role && spec?.purpose) {
+    const generated = core.generateAssignment({
+      state: next,
+      role: spec.role,
+      purpose: spec.purpose,
+      issued_at: observedAt,
+      context_entrypoints: snapshot.context_entrypoints ?? [],
+      execution_repository: snapshot.execution_repository ?? null,
+      relevant_inputs: {
+        invalidation_reason: action.reason,
+        required_evidence_digest:
+          snapshot.required_evidence_digest ?? null,
+        target_digest: snapshot.target_digest ?? null
+      },
+      independence: recoveryIndependence({
+        role: spec.role,
+        state: next,
+        profile
+      })
+    });
+    next.assignment = assignmentProjection(
+      generated,
+      state.state_version
+    );
+  }
+
+  next.updated_by = {
+    o_run_id: oRunId,
+    transition_id: state.updated_by.transition_id,
+    idempotence_key:
+      "agenti-invalidate:" +
+      core.digest({
+        work_item: state.work_item,
+        from_state_version: state.state_version,
+        earliest,
+        reason: action.reason,
+        evidence_status: action.evidence_status ?? null,
+        contract_digest: next.contract.digest,
+        candidate_digest: next.candidate?.digest ?? null
+      }).slice(7, 39)
+  };
+
+  return next;
+}
+
 export function projectAdapterState({ core, state, action, snapshot, profile, oRunId }) {
   let next = state
     ? core.projectAction(state, action, oRunId)
