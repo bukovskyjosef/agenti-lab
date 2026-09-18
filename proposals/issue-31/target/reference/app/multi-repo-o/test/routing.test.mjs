@@ -93,6 +93,7 @@ function assignmentEnvelope(state, issuedAt = OBSERVED) {
       { kind: "agent_entrypoint", ref: "AGENTS.md" }
     ],
     capability_profile: a.capability_profile,
+    claim: { required: true },
     independence: {
       required: a.role === "R",
       must_differ_from_execution_instances:
@@ -159,19 +160,62 @@ function buildRoutedDState(issue) {
     "claude-d"
   );
   const projected = core.projectAction(state, action, "o-t02");
-  projected.assignment.workflow_run_id = "7001";
-  projected.assignment.dispatch_status = "running";
-  projected.run_receipts[action.assignment.assignment_id] = {
+  const envelope = assignmentEnvelope(projected);
+  const executionInstanceId = "github-actions:acme/service-a:7001:1";
+  const acquired = core.acquireClaimCAS({
+    state: projected,
+    request: {
+      schema_version: 1,
+      work_item: envelope.work_item,
+      assignment_id: envelope.assignment_id,
+      role: envelope.role,
+      purpose: envelope.purpose,
+      expected: {
+        workflow_state_version: projected.state_version,
+        claim_version: projected.claim_control?.claim_version ?? 0,
+        assignment_freshness_fingerprint: envelope.state.fingerprint,
+        semantic_work_digest: envelope.semantic_work_digest,
+        candidate_digest: projected.candidate?.digest ?? null,
+        active_claim: "ABSENT"
+      },
+      claimant: {
+        execution_attestation: {
+          adapter_id: envelope.execution_route.adapter_id,
+          adapter_version: envelope.execution_route.adapter_version,
+          execution_instance_id: executionInstanceId,
+          platform_run: {
+            provider: "github-actions",
+            run_id: "7001",
+            run_attempt: 1,
+            job_or_worker_id: null
+          },
+          provider_session: { mode: "fresh", provider_session_id: null },
+          issued_for_assignment: envelope.assignment_id,
+          attested_by: "deterministic-wrapper"
+        }
+      },
+      lease: { mode: "PLATFORM_RUN" },
+      requested_at: OBSERVED,
+      request_id: "routing-test-claim"
+    },
+    acquiredAt: OBSERVED
+  });
+  assert.equal(acquired.acquired, true);
+  const claimed = acquired.state;
+  claimed.assignment.workflow_run_id = "7001";
+  claimed.assignment.dispatch_status = "running";
+  claimed.run_receipts[action.assignment.assignment_id] = {
     fingerprint: action.assignment.state.fingerprint,
     assignment_id: action.assignment.assignment_id,
-    execution_instance_id:
-      "github-actions:acme/service-a:7001:1",
+    execution_instance_id: executionInstanceId,
+    claim_id: acquired.grant.claim_id,
+    claim_generation: acquired.grant.claim_generation,
     role: "D",
     purpose: action.assignment.purpose,
     semantic_work_digest: action.assignment.semantic_work_digest,
     freshness_fingerprint: action.assignment.state.fingerprint
   };
-  return { state: projected, assignment: action.assignment };
+  return { state: claimed, assignment: action.assignment };
 }
 
 function fakeGitHub({ issue, state }) {
@@ -380,6 +424,8 @@ test("F2 App failure writer marks accepted UNAVAILABLE as T14-routable", () => {
     core,
     assignment,
     executionInstanceId: "github-actions:acme/service-a:7001:1",
+    claimId: built.state.claim_control.active_claim.claim_id,
+    claimGeneration: built.state.claim_control.active_claim.claim_generation,
     status: "UNAVAILABLE",
     observedAt: OBSERVED
   });
