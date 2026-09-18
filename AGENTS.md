@@ -20,11 +20,26 @@ pak:
 
 1. načti Issue #N a jeho komentáře/linked artefakty,
 2. urč svou roli podle zadání,
-3. načti jen relevantní lab pravidla a relevantní aktuální dokumenty z `bukovskyjosef/agenti@main`,
-4. proveď pouze práci autorizovanou tímto Issue a rolí,
-5. výsledek durable zapiš do Issue/PR/review,
-6. v chatu člověku dej stručný výsledek,
-7. pokud nejsi K, **povinně ukonči odpověď explicitním handoffem pro další roli podle §4**.
+3. **proveď pre-run authority check podle aktuálního durable stavu Issue/PR**,
+4. načti jen relevantní lab pravidla a relevantní aktuální dokumenty z `bukovskyjosef/agenti@main`,
+5. proveď pouze práci autorizovanou tímto Issue a rolí,
+6. výsledek durable zapiš do Issue/PR/review,
+7. v chatu člověku dej stručný výsledek,
+8. pokud nejsi K, **povinně ukonči odpověď explicitním handoffem pro další roli podle §4**.
+
+### Povinný pre-run authority check
+
+**Human prompt je nutný pro aktivaci role, ale sám o sobě není dostatečnou autoritou k zahájení práce na Issue.** Před první materiální prací nebo zápisem musí agent fresh-readnout aktuální durable stav přiděleného Issue a souvisejícího PR a ověřit současně:
+
+- Issue/PR skutečně čeká na jeho aktivní roli nebo ji explicitně uvádí jako current owner / next authority,
+- všechny durable dependencies a gates požadované pro tento krok jsou splněné,
+- případný exact target / head / candidate odpovídá tomu, co má role zpracovat,
+- work item není `BLOCKED`, `STOPPED`, superseded, waiting for jinou roli/Humana nebo jinak neeligible pro tento run,
+- u corrective/re-review práce vznikla od předchozího běhu skutečná durable změna artefaktu nebo stavu, která nový běh opravňuje.
+
+Pokud některá podmínka neplatí, agent **nesmí začít požadovanou materiální práci**, nesmí si sám změnit waiting ownership ani obejít blocker. Provede pouze bezpečný no-op: stručně oznámí konflikt mezi chatovým zadáním a durable stavem a uvede, na koho/na co Issue skutečně čeká. Pokud Human zamýšlí stav vědomě změnit nebo overrideovat, musí se tato změna nejdřív stát durable autorizovaným stavem; samotný chatový pokyn durable guard nepřebíjí.
+
+Stejné pravidlo platí i tehdy, když prompt vznikl z dřívějšího handoffu. **Stale handoff prompt není authority. Aktuální repository state vždy rozhoduje, zda run smí začít.**
 
 Open Issues jsou pracovní fronta. **Nepřebírej další Issue svévolně**, pokud ti to člověk nebo aktuální kontrakt výslovně nezadal.
 
@@ -113,6 +128,7 @@ Písmeno i název role se samozřejmě nahradí skutečnou další rolí `A`, `E
 Pravidla handoffu:
 
 - prompt má být krátký a má odkazovat na durable repository state; nesmí do něj být nutné kopírovat soukromý chatový kontext,
+- těsně před vytvořením handoffu agent znovu fresh-readne relevantní durable stav; nesmí doporučit roli, která je blokovaná nebo už není current next authority,
 - agent musí vybrat **právě jednu** další roli podle aktuálních dependencies a workflow,
 - handoff prompt **nepřepíná roli aktuální session**; pokud má stejná session pokračovat v jiné roli, Human nebo orchestrace ji musí výslovně přeřadit podle pravidla explicitní aktivní role,
 - pokud během aktivního Issue potřebuje Human rozhodnutí v jeho scope, agent se ptá přímo Humana, zapíše odpověď durable a po odstranění blockeru pokračuje; nepředává to automaticky na K,
