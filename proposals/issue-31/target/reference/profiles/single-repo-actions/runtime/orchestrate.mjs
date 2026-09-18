@@ -6,6 +6,8 @@ import {
   evaluate,
   generateAssignment,
   projectAction,
+  terminalizeClaim,
+  verifyRoleResultClaim,
   validateSchema
 } from "../core/index.mjs";
 import { githubClientFromEnv } from "./github.mjs";
@@ -16,7 +18,6 @@ import {
   ROLE_RESULT_MARKER,
   findAssignmentAudit,
   findRoleResult,
-  findRunClaim,
   loadState,
   parseMachinePayload,
   renderMachineComment,
@@ -106,6 +107,12 @@ function initialProjection(action, runtimeVersion) {
       published_identity: null
     },
     run_receipts: {},
+    claim_control: {
+      claim_version: 0,
+      active_claim: null,
+      last_terminal: null
+    },
+    material_operation: null,
     failure: {
       active_ref: null,
       retry_reason: null,
@@ -298,6 +305,13 @@ async function currentRoleResult(github, runtime, state, comments) {
   if (errors.length) throw new Error("Durable role result invalid: " + errors.join("; "));
 
   const assignment = assignmentFromState(state, runtime.projectProfile);
+  const claimVerification = verifyRoleResultClaim({
+    state,
+    normalizedResult: normalized
+  });
+  if (!claimVerification.valid) {
+    throw new Error("Role result claim rejected: " + claimVerification.reason);
+  }
   const applied = applyRoleResult({
     state,
     assignment,
@@ -745,6 +759,37 @@ async function applyTransitionSideEffects({
   const runId = process.env.GITHUB_RUN_ID ?? "local-o";
   let next = projectAction(state, action, runId);
 
+  if (state.claim_control?.active_claim) {
+    let terminalReason = null;
+    let evidenceRef = null;
+    if (roleResult) {
+      terminalReason =
+        roleResult.normalized.status === "COMPLETED" ? "COMPLETED" :
+        roleResult.normalized.status === "BLOCKED" ? "BLOCKED" :
+        "FAILED";
+      evidenceRef = String(roleResult.comment?.id ?? "");
+    } else if (action.transition_id === "T14") {
+      terminalReason = "REROUTED";
+    } else if (action.transition_id === "T16") {
+      terminalReason = "REVOKED_STOP";
+    }
+    if (terminalReason) {
+      next = terminalizeClaim({
+        state: next,
+        terminalReason,
+        durableEvidenceRef: evidenceRef || null
+      }).state;
+    }
+  }
+
+  if (roleResult && state.claim_control?.active_claim) {
+    const receipt = next.run_receipts?.[roleResult.normalized.trusted.assignment_id];
+    if (receipt) {
+      receipt.claim_id = roleResult.normalized.trusted.claim_id;
+      receipt.claim_generation = roleResult.normalized.trusted.claim_generation;
+    }
+  }
+
   if (roleResult && !action.assignment) next.assignment = null;
 
   if (roleResult?.normalized.role === "D" && snapshot.candidate) {
@@ -860,7 +905,11 @@ export async function processIssue(issueNumber) {
 
     if (loaded.state?.assignment) {
       const roleComment = findRoleResult(loaded.comments, loaded.state.assignment.assignment_id);
-      const claim = findRunClaim(loaded.comments, loaded.state.assignment.assignment_id);
+      const claim =
+        loaded.state.claim_control?.active_claim?.assignment_id ===
+        loaded.state.assignment.assignment_id
+          ? loaded.state.claim_control.active_claim
+          : null;
       if (!roleComment && !claim) {
         await ensureAssignmentDispatch(github, runtime, loaded.state, loaded.comments, issueNumber);
         return { status: "DISPATCH_REPAIRED", assignment: loaded.state.assignment.assignment_id };
@@ -882,7 +931,15 @@ export async function processIssue(issueNumber) {
         transition_id: state.updated_by.transition_id,
         idempotence_key: "release-rejected:" + digest(built.snapshot.release_rejection.command).slice(7, 39)
       };
-      await saveStateCAS(github, issueNumber, next, runtime.workflowStateSchema, loaded.comment, state.state_version);
+      await saveStateCAS(
+        github,
+        issueNumber,
+        next,
+        runtime.workflowStateSchema,
+        loaded.comment,
+        state.state_version,
+        state.claim_control?.claim_version ?? 0
+      );
       await projectLabels(github, issueNumber, next, runtime.runtimeConfig);
       return { status: "WAITING_AFTER_RELEASE_REJECTION" };
     }
@@ -901,8 +958,22 @@ export async function processIssue(issueNumber) {
     }
     if (action.kind === "BLOCKED") return { status: "BLOCKED", reason: action.reason, errors: action.errors };
     if (action.kind === "INVALIDATE") {
-      const next = invalidateProjection(state, action, process.env.GITHUB_RUN_ID ?? "local-o");
-      await saveStateCAS(github, issueNumber, next, runtime.workflowStateSchema, loaded.comment, state.state_version);
+      let next = invalidateProjection(state, action, process.env.GITHUB_RUN_ID ?? "local-o");
+      if (state.claim_control?.active_claim) {
+        next = terminalizeClaim({
+          state: next,
+          terminalReason: "REVOKED_DRIFT"
+        }).state;
+      }
+      await saveStateCAS(
+        github,
+        issueNumber,
+        next,
+        runtime.workflowStateSchema,
+        loaded.comment,
+        state.state_version,
+        state.claim_control?.claim_version ?? 0
+      );
       await projectLabels(github, issueNumber, next, runtime.runtimeConfig);
       return { status: "INVALIDATED", reason: action.reason, earliest: action.earliest_affected_point };
     }
@@ -928,7 +999,8 @@ export async function processIssue(issueNumber) {
       next,
       runtime.workflowStateSchema,
       loaded.comment,
-      state ? state.state_version : null
+      state ? state.state_version : null,
+      state ? (state.claim_control?.claim_version ?? 0) : null
     );
     await projectLabels(github, issueNumber, next, runtime.runtimeConfig);
 
@@ -955,7 +1027,17 @@ export async function processAllManaged() {
   const issues = await github.listManagedIssues(runtime.runtimeConfig.intake_label);
   const results = [];
   for (const issue of issues.filter((item) => !item.pull_request)) {
-    results.push({ issue: issue.number, result: await processIssue(issue.number) });
+    await github.dispatchWorkflow(
+      runtime.runtimeConfig.workflows?.orchestrate ?? "agenti-orchestrate.yml",
+      {
+        issue_number: String(issue.number),
+        wake_kind: "agenti.reconcile",
+        assignment_id: "",
+        result_ref: ""
+      },
+      runtime.runtimeConfig.default_branch
+    );
+    results.push({ issue: issue.number, dispatched: true });
   }
   return results;
 }
