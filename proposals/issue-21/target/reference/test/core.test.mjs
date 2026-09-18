@@ -12,7 +12,8 @@ import {
   reconstructState,
   renderStateComment,
   runEligibility,
-  verifyAcceptedEvidence
+  verifyAcceptedEvidence,
+  validateSchema
 } from "../core/index.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -47,6 +48,36 @@ test("doctor validates schemas, transitions, O/P split and R independence config
   });
   assert.equal(badResult.ok, false);
   assert.match(badResult.errors.join("\n"), /Contents write/);
+});
+
+
+test("new managed intake emits explicit schema-valid A assignment", () => {
+  const action = evaluate(
+    profile,
+    null,
+    {
+      intake: { accepted: true },
+      work_item: {
+        control_repository: "example/product",
+        issue_number: 99,
+        kind: "executable"
+      },
+      contract_digest: digest({ issue: 99 }),
+      contract_source_ref: "issue:99",
+      contract_revision: "2026-09-18T10:00:00Z",
+      context_entrypoints: [
+        { kind: "work_item", ref: "example/product#99" },
+        { kind: "project_profile", ref: ".agenti/project-profile.yml" }
+      ]
+    },
+    { observed_at: "2026-09-18T10:00:00Z" },
+    transitionTable
+  );
+
+  assert.equal(action.transition_id, "T01");
+  assert.equal(action.assignment.role, "A");
+  assert.equal(action.assignment.purpose, "SHAPE_INTENT");
+  assert.deepEqual(validateSchema(action.assignment, schemas.assignment), []);
 });
 
 test("bounded O projection round-trips and cold-reconstructs", () => {
