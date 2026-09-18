@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "profile_id": "single-repo-actions",
+  "intake_label": "agenti:managed",
+  "human_queue_labels": {
+    "input": "agenti:waiting-human",
+    "release": "agenti:release-approval"
+  },
+  "default_branch": "__DEFAULT_BRANCH__",
+  "runner": {
+    "adapter": "codex-action",
+    "codex_action_ref": "86365089eb2b84e0a8fb0717b304f8bdcb13b20e",
+    "secret_name": "OPENAI_API_KEY",
+    "model": "",
+    "effort": ""
+  },
+  "publication": {
+    "mode": "merge",
+    "merge_method": "squash"
+  },
+  "test_mode": false
+}
