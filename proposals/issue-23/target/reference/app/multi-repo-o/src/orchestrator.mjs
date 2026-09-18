@@ -7,6 +7,8 @@ import {
 } from "./state-projection.mjs";
 import { workItemKey } from "./mapping.mjs";
 
+const RECEIVER_CLAIM_LEASE_MS = 5 * 60 * 1000;
+
 function assignmentEnvelopeFromState(state, profile, observedAt) {
   if (!state?.assignment) return null;
   const a = state.assignment;
@@ -211,6 +213,7 @@ export class MultiRepoOrchestrator {
     this.store = store;
     this.trustedResultActorIds = trustedResultActorIds;
     this.trustedStateAppId = trustedStateAppId;
+    this.receiverClaimLocks = new Map();
   }
 
   async reconstruct(workItem) {
@@ -222,6 +225,27 @@ export class MultiRepoOrchestrator {
       trustedResultActorIds: this.trustedResultActorIds,
       trustedStateAppId: this.trustedStateAppId
     });
+  }
+
+  async withReceiverClaimMutex(workItem, fn) {
+    const key = workItemKey(workItem);
+    const previous = this.receiverClaimLocks.get(key) ?? Promise.resolve();
+    let release;
+    const current = new Promise((resolve) => {
+      release = resolve;
+    });
+    const tail = previous.then(() => current);
+    this.receiverClaimLocks.set(key, tail);
+
+    await previous;
+    try {
+      return await fn();
+    } finally {
+      release();
+      if (this.receiverClaimLocks.get(key) === tail) {
+        this.receiverClaimLocks.delete(key);
+      }
+    }
   }
 
   async verifyRunnerWorkflowRun({
@@ -409,51 +433,55 @@ export class MultiRepoOrchestrator {
       };
     }
 
-    const claimKey = receiverClaimLeaseKey(state.work_item);
-    const claimOwner = receiverClaimLeaseOwner({
-      assignmentId: assignment.assignment_id,
-      runnerRepository: dispatched.target.repository,
-      workflowRunId: dispatched.workflow_run_id,
-      workflowRunAttempt: dispatched.run_attempt ?? 1,
-      source: "dispatch"
-    });
-    const claimLeaseMs = 30000;
+    return this.withReceiverClaimMutex(
+      state.work_item,
+      async () => {
+        const claimKey = receiverClaimLeaseKey(state.work_item);
+        const claimOwner = receiverClaimLeaseOwner({
+          assignmentId: assignment.assignment_id,
+          runnerRepository: dispatched.target.repository,
+          workflowRunId: dispatched.workflow_run_id,
+          workflowRunAttempt: dispatched.run_attempt ?? 1,
+          source: "dispatch"
+        });
 
-    if (!this.store.acquireWorkLease({
-      workKey: claimKey,
-      owner: claimOwner,
-      leaseMs: claimLeaseMs
-    })) {
-      throw new Error("DURABLE_RUN_CLAIM_BUSY");
-    }
-
-    try {
-      const fresh = await this.reconstruct(state.work_item);
-      const claim = await this.bindAssignmentRun({
-        reconstructed: fresh,
-        assignment,
-        runnerRepository: dispatched.target.repository,
-        workflowRunId: dispatched.workflow_run_id,
-        workflowRunAttempt: dispatched.run_attempt ?? 1,
-        status: "dispatched"
-      });
-
-      if (!claim.valid) {
-        throw new Error(`DURABLE_RUN_CLAIM_FAILED:${claim.reason}`);
-      }
-
-      return {
-        state: claim.state,
-        stateComment: claim.stateComment,
-        dispatched: {
-          ...dispatched,
-          durable_claim: true,
-          execution_instance_id: claim.execution_instance_id
+        if (!this.store.acquireWorkLease({
+          workKey: claimKey,
+          owner: claimOwner,
+          leaseMs: RECEIVER_CLAIM_LEASE_MS
+        })) {
+          throw new Error("DURABLE_RUN_CLAIM_BUSY");
         }
-      };
-    } finally {
-      this.store.releaseWorkLease(claimKey, claimOwner);
-    }
+
+        try {
+          const fresh = await this.reconstruct(state.work_item);
+          const claim = await this.bindAssignmentRun({
+            reconstructed: fresh,
+            assignment,
+            runnerRepository: dispatched.target.repository,
+            workflowRunId: dispatched.workflow_run_id,
+            workflowRunAttempt: dispatched.run_attempt ?? 1,
+            status: "dispatched"
+          });
+
+          if (!claim.valid) {
+            throw new Error(`DURABLE_RUN_CLAIM_FAILED:${claim.reason}`);
+          }
+
+          return {
+            state: claim.state,
+            stateComment: claim.stateComment,
+            dispatched: {
+              ...dispatched,
+              durable_claim: true,
+              execution_instance_id: claim.execution_instance_id
+            }
+          };
+        } finally {
+          this.store.releaseWorkLease(claimKey, claimOwner);
+        }
+      }
+    );
   }
 
   async processWorkItem(workItem, observedAt = new Date().toISOString()) {
@@ -585,92 +613,92 @@ export class MultiRepoOrchestrator {
       return { valid: false, reason: "RUNNER_REPOSITORY_MISMATCH" };
     }
 
-    const claimKey = receiverClaimLeaseKey(workItem);
-    const claimOwner = receiverClaimLeaseOwner({
-      assignmentId: assignment.assignment_id,
-      runnerRepository,
-      workflowRunId,
-      workflowRunAttempt,
-      source: "receiver"
-    });
-    const claimLeaseMs = 30000;
+    return this.withReceiverClaimMutex(
+      workItem,
+      async () => {
+        const claimKey = receiverClaimLeaseKey(workItem);
+        const claimOwner = receiverClaimLeaseOwner({
+          assignmentId: assignment.assignment_id,
+          runnerRepository,
+          workflowRunId,
+          workflowRunAttempt,
+          source: "receiver"
+        });
 
-    if (!this.store.acquireWorkLease({
-      workKey: claimKey,
-      owner: claimOwner,
-      leaseMs: claimLeaseMs
-    })) {
-      return {
-        valid: false,
-        reason: "ASSIGNMENT_RUN_CLAIM_CONFLICT",
-        workflow_run_id: null
-      };
-    }
+        if (!this.store.acquireWorkLease({
+          workKey: claimKey,
+          owner: claimOwner,
+          leaseMs: RECEIVER_CLAIM_LEASE_MS
+        })) {
+          return {
+            valid: false,
+            reason: "ASSIGNMENT_RUN_CLAIM_CONFLICT",
+            workflow_run_id: null
+          };
+        }
 
-    try {
-      // The receiver claim critical section intentionally begins before the
-      // fresh authority reconstruction and ends only after the durable
-      // GitHub claim/grant decision is complete.
-      const reconstructed = await this.reconstruct(workItem);
-      if (!assignmentMatchesState(
-        assignment,
-        reconstructed.state,
-        this.profile,
-        this.core
-      )) {
-        return { valid: false, reason: "ASSIGNMENT_NOT_CURRENT" };
+        try {
+          const reconstructed = await this.reconstruct(workItem);
+          if (!assignmentMatchesState(
+            assignment,
+            reconstructed.state,
+            this.profile,
+            this.core
+          )) {
+            return { valid: false, reason: "ASSIGNMENT_NOT_CURRENT" };
+          }
+          if (reconstructed.snapshot.role_result) {
+            return { valid: false, reason: "CURRENT_RESULT_ALREADY_EXISTS" };
+          }
+
+          const action = this.core.evaluate(
+            this.profile,
+            reconstructed.state,
+            reconstructed.snapshot,
+            { observed_at: new Date().toISOString() },
+            this.transitionTable
+          );
+          if (
+            action.kind !== "NO_OP" ||
+            action.reason !== "NO_AUTHORIZED_TRANSITION"
+          ) {
+            return {
+              valid: false,
+              reason: "AUTHORITY_CHANGED_BEFORE_ROLE_START",
+              current_action: action.kind,
+              transition_id: action.transition_id ?? null
+            };
+          }
+
+          const claim = await this.bindAssignmentRun({
+            reconstructed,
+            assignment,
+            runnerRepository,
+            workflowRunId,
+            workflowRunAttempt,
+            status: "running"
+          });
+          if (!claim.valid) {
+            return {
+              valid: false,
+              reason: claim.reason,
+              workflow_run_id: claim.workflow_run_id ?? null
+            };
+          }
+
+          return {
+            valid: true,
+            reason: claim.already_claimed
+              ? "CURRENT_EXPLICIT_ASSIGNMENT_RUN_CONFIRMED"
+              : "CURRENT_EXPLICIT_ASSIGNMENT_RUN_CLAIMED",
+            state_version: claim.state.state_version,
+            candidate_digest: claim.state.candidate.digest,
+            workflow_run_id: claim.run_id,
+            run_attempt: claim.run_attempt,
+            execution_instance_id: claim.execution_instance_id
+          };
+        } finally {
+          this.store.releaseWorkLease(claimKey, claimOwner);
+        }
       }
-      if (reconstructed.snapshot.role_result) {
-        return { valid: false, reason: "CURRENT_RESULT_ALREADY_EXISTS" };
-      }
-
-      const action = this.core.evaluate(
-        this.profile,
-        reconstructed.state,
-        reconstructed.snapshot,
-        { observed_at: new Date().toISOString() },
-        this.transitionTable
-      );
-      if (
-        action.kind !== "NO_OP" ||
-        action.reason !== "NO_AUTHORIZED_TRANSITION"
-      ) {
-        return {
-          valid: false,
-          reason: "AUTHORITY_CHANGED_BEFORE_ROLE_START",
-          current_action: action.kind,
-          transition_id: action.transition_id ?? null
-        };
-      }
-
-      const claim = await this.bindAssignmentRun({
-        reconstructed,
-        assignment,
-        runnerRepository,
-        workflowRunId,
-        workflowRunAttempt,
-        status: "running"
-      });
-      if (!claim.valid) {
-        return {
-          valid: false,
-          reason: claim.reason,
-          workflow_run_id: claim.workflow_run_id ?? null
-        };
-      }
-
-      return {
-        valid: true,
-        reason: claim.already_claimed
-          ? "CURRENT_EXPLICIT_ASSIGNMENT_RUN_CONFIRMED"
-          : "CURRENT_EXPLICIT_ASSIGNMENT_RUN_CLAIMED",
-        state_version: claim.state.state_version,
-        candidate_digest: claim.state.candidate.digest,
-        workflow_run_id: claim.run_id,
-        run_attempt: claim.run_attempt,
-        execution_instance_id: claim.execution_instance_id
-      };
-    } finally {
-      this.store.releaseWorkLease(claimKey, claimOwner);
-    }
-  }}
+    ); }}
