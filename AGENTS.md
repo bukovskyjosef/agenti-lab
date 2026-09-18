@@ -35,6 +35,7 @@ pak:
 - všechny durable dependencies a gates požadované pro tento krok jsou splněné,
 - případný exact target / head / candidate odpovídá tomu, co má role zpracovat,
 - work item není `BLOCKED`, `STOPPED`, superseded, waiting for jinou roli/Humana nebo jinak neeligible pro tento run,
+- durable `Concurrency` kontrakt dovoluje tento run vůči ostatním právě materiálně aktivním work items ve stejném coordination/Parent-Intent scope,
 - u corrective/re-review práce vznikla od předchozího běhu skutečná durable změna artefaktu nebo stavu, která nový běh opravňuje.
 
 Pokud některá podmínka neplatí, agent **nesmí začít požadovanou materiální práci**, nesmí si sám změnit waiting ownership ani obejít blocker. Provede pouze bezpečný no-op: stručně oznámí konflikt mezi chatovým zadáním a durable stavem a uvede, na koho/na co Issue skutečně čeká. Pokud Human zamýšlí stav vědomě změnit nebo overrideovat, musí se tato změna nejdřív stát durable autorizovaným stavem; samotný chatový pokyn durable guard nepřebíjí.
@@ -49,7 +50,7 @@ Claim znamená, že:
 
 - work item je `IN PROGRESS` právě u jedné aktivní role/session,
 - žádný druhý agent nesmí na stejném Issue zahájit materiální práci, **ani když má stejnou roli a stejný prompt**,
-- aktivní claim blokuje paralelní analýzu/editaci/review/publish téhož work itemu; legitimní paralelismus se řeší samostatnými child Issues/work items,
+- aktivní claim blokuje paralelní analýzu/editaci/review/publish téhož work itemu; legitimní paralelismus vyžaduje samostatné work items **a** explicitní aktuální K-autorizaci `PARALLEL-SAFE` podle pravidla níže,
 - u exact-target práce claim zahrnuje konkrétní target/head/candidate binding, pokud existuje,
 - handoff prompt sám claim nevytváří; claim vzniká až při skutečném zahájení eligible runu.
 
@@ -66,6 +67,35 @@ Claim se uvolňuje nebo nahrazuje pouze durable změnou stavu při:
 Agent si **nesmí sám prohlásit cizí claim za stale** jen proto, že nevidí aktivitu. Pokud není definovaná automatická lease/heartbeat politika, stale claim odstraňuje K/Human po ověření situace. Pokud automatická orchestrace lease podporuje, musí být expiry/renewal explicitní a CAS/idempotentní.
 
 Změna exact targetu/headu během aktivního review/implementation claimu invaliduje původní binding. Agent nesmí tiše pokračovat na novém targetu pod starým claimem.
+
+### Cross-work-item concurrency: serial by default
+
+V rámci stejného coordination/Parent-Intent scope je výchozí kontrakt každého executable work itemu:
+
+`Concurrency: SERIAL`
+
+Absence explicitní aktuální výjimky znamená, že dva odlišné work items **nesmějí být současně materiálně aktivní**. Samostatné Issues samy o sobě paralelismus neopravňují.
+
+Výjimku smí udělit pouze **K = Konzultant** po fresh-readu obou aktuálních work-item kontraktů a ověření, že jejich známé scope, dependencies a mutable targets nejsou v materiálním konfliktu. Human může K rozhodnutí explicitně overrideovat.
+
+Povolení musí být durable, **pairwise a reciproční** na obou work items, například:
+
+- #A: `Concurrency: PARALLEL-SAFE with #B`
+- #B: `Concurrency: PARALLEL-SAFE with #A`
+
+Jednostranný, historický nebo pouze chatový zápis paralelismus neopravňuje. `PARALLEL-SAFE` není tranzitivní: bezpečnost #A↔#B a #B↔#C sama o sobě neautorizuje #A↔#C.
+
+A/E/R/P nesmí parallelism self-authorize. Při pre-run guardu musí ověřit nejen svůj Issue/claim, ale i relevantní materiálně aktivní work items ve stejném scope a jejich aktuální reciproční `Concurrency` kontrakt.
+
+Pokud aktivní agent zjistí novou dependency, shared mutable target, scope overlap nebo jiný konflikt, který zpochybní existující `PARALLEL-SAFE`:
+
+1. nesmí pod starou autorizací tiše pokračovat,
+2. durable zaznamená nově zjištěný konflikt,
+3. konfliktní/dependent material work zastaví a svůj claim korektně uvolní nebo terminálně označí,
+4. pokud není dependency direction jednoznačný, další material work čeká na K/Human reconciliation,
+5. K může parallelism znovu autorizovat pouze po fresh evaluation.
+
+`PARALLEL-SAFE` nikdy nemění invariant jednoho aktivního claimu na work item, role authority, exact-target binding ani review independence. Je to pouze koordinace mezi **odlišnými** work items.
 
 Open Issues jsou pracovní fronta. **Nepřebírej další Issue svévolně**, pokud ti to člověk nebo aktuální kontrakt výslovně nezadal.
 

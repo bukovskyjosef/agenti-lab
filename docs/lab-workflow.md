@@ -62,6 +62,8 @@ Používej krátké jednoznačné statusy, například:
 
 Pokud agent dokončí svůj krok nebo vznikne nový blocker, musí odpovídající Issue/PR status aktualizovat ještě před handoffem v chatu.
 
+Každý executable work item musí zároveň mít durable `Concurrency` kontrakt. Výchozí hodnota je `SERIAL`; výjimku `PARALLEL-SAFE with #N` smí udělit pouze K podle §2.3.
+
 ### 2.1 Pre-run authority guard
 
 Explicitní Human instrukce typu `Jsi R. Pracuj na Issue #N` aktivuje roli, ale **není sama o sobě oprávněním obejít aktuální durable workflow state**.
@@ -72,7 +74,8 @@ Každý A/E/R/K/P run musí před první materiální prací nebo zápisem:
 2. ověřit, že current `Waiting ownership` / status / explicitní next authority dovoluje právě jeho aktivní roli,
 3. ověřit splnění dependencies, gates a případné exact-target/head binding,
 4. ověřit, že work item není blokovaný, stopped, superseded nebo waiting for jinou autoritu,
-5. u corrective/re-review runu ověřit, že od předchozího běhu existuje nová durable změna, kterou má smysl zpracovat.
+5. ověřit aktuální `Concurrency` kontrakt proti ostatním materiálně aktivním work items ve stejném coordination/Parent-Intent scope,
+6. u corrective/re-review runu ověřit, že od předchozího běhu existuje nová durable změna, kterou má smysl zpracovat.
 
 Pokud guard neprojde, agent provede **no-op**:
 
@@ -93,7 +96,7 @@ Tento guard platí i pro copy-paste prompt, který byl správný v okamžiku př
 - Jeden Issue/work item může mít nejvýše **jeden aktivní claim**.
 - Claim rezervuje work item pro konkrétní aktivní roli/run.
 - Druhý agent provede no-op i tehdy, pokud má stejnou roli, stejný handoff prompt nebo identický účel.
-- Paralelní práce je legitimní pouze na samostatných work items, typicky child Issues.
+- Paralelní práce je legitimní pouze na samostatných work items, které mají navíc aktuální reciproční K-autorizaci `PARALLEL-SAFE` podle §2.3.
 - `BLOCKED` zůstává stavem skutečného blockeru; obsazená práce se značí `IN PROGRESS` / `CLAIMED`, aby se nemíchaly dvě různé příčiny neeligibility.
 
 #### Minimální durable claim data
@@ -129,6 +132,43 @@ Claim se durable uvolní nebo nahradí při:
 Bez explicitní lease/heartbeat politiky agent **nesmí sám vyhodnotit cizí claim jako stale**. K nebo Human nejprve ověří situaci a durable claim zruší/reassignuje. Automatická orchestrace může použít lease expiry/heartbeat jen pokud je recovery CAS/idempotentní a je jasné, že expiry není totéž co dokončení práce.
 
 Pokud se exact target/head změní, claim navázaný na předchozí target se nesmí automaticky přenést; dotčený run musí zastavit nebo znovu získat claim pro nový oprávněný target.
+
+### 2.3 Bounded parallelism mezi work items
+
+#### Default: serial
+
+V jednom coordination/Parent-Intent scope platí pro každý executable work item bez dalšího rozhodnutí:
+
+`Concurrency: SERIAL`
+
+Dva odlišné work items s `SERIAL` nesmějí být současně materiálně aktivní. Samotné rozdělení práce do více Issues není povolením paralelního běhu.
+
+#### Pairwise výjimka: PARALLEL-SAFE
+
+Pouze **K = Konzultant** může po fresh-readu obou aktuálních work-item kontraktů povolit souběh, pokud jejich známé scope, dependencies a mutable targets nejsou v materiálním konfliktu. Human může toto koordinační rozhodnutí explicitně overrideovat.
+
+Autorizace musí být durable a reciproční na obou Issues:
+
+```text
+#A  Concurrency: PARALLEL-SAFE with #B
+#B  Concurrency: PARALLEL-SAFE with #A
+```
+
+Jednostranný nebo stale zápis nestačí. Vztah je výhradně pairwise a není tranzitivní: dvě existující pairwise autorizace nevytvářejí třetí.
+
+A/E/R/P mohou dodat evidence o nezávislosti, ale nesmí si `PARALLEL-SAFE` sami přidělit ani z něj odvozovat další paralelní vztahy.
+
+#### Dynamic dependency / conflict
+
+Parallel safety je podmíněná aktuálním durable poznáním. Pokud aktivní agent zjistí novou dependency, shared mutable target, scope overlap nebo jiný konflikt:
+
+1. pod původní `PARALLEL-SAFE` autorizací tiše nepokračuje,
+2. konflikt durable zapíše,
+3. konfliktní/dependent material work zastaví a svůj claim uvolní nebo terminálně označí podle skutečného stavu,
+4. není-li dependency direction jednoznačný, další material work čeká na K/Human reconciliation,
+5. K smí parallelism znovu povolit až po fresh evaluation.
+
+Toto pravidlo nemění exclusive-claim invariant: na jednom work itemu může být stále nejvýše jeden aktivní claim. Nemění ani role authority, exact-target binding, review independence nebo jiné workflow gates.
 
 ## 3. K — Konzultant a Human dispatch
 
