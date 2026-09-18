@@ -77,7 +77,9 @@ async function reconcile() {
   await enqueueReconcile({
     gh,
     profile: config.projectProfile,
-    store
+    store,
+    core,
+    trustedStateAppId: config.appId
   });
   await pumpWorker();
 }
