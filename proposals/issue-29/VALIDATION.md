@@ -49,7 +49,7 @@ Corrective combined run `35383370110` was green before documentation close-out:
 - Docker **PASS**;
 - combined exact-target validation **OK**.
 
-A final close-out run is required after these documentation/checklist updates; its run ID and exact tested/final heads are recorded durably on Issue #29 / PR #38.
+The authoritative final close-out run ID and exact tested/final heads are recorded durably on Issue #29 / PR #38. This file intentionally avoids self-binding to a future commit/run so final review metadata can remain byte-stable.
 
 ## Conformance matrix
 
