@@ -270,6 +270,9 @@ export function applyRoleResult({ state, assignment, normalizedResult, projectPr
     return { accepted: false, reason: "ASSIGNMENT_NOT_CURRENT" };
   }
   if (
+    state.assignment.bound_state_version !== state.state_version ||
+    assignment.state.version !== state.state_version ||
+    state.assignment.fingerprint !== assignment.state.fingerprint ||
     normalizedResult.trusted.observed_state_version !== state.state_version ||
     normalizedResult.trusted.observed_fingerprint !== assignment.state.fingerprint
   ) {
