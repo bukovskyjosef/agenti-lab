@@ -15,6 +15,13 @@ import {
 
 const RECEIVER_CLAIM_LEASE_MS = 5 * 60 * 1000;
 
+const ROLE_MATERIAL_OPERATIONS = Object.freeze({
+  A: new Set(["A_CONTRACT_MUTATION"]),
+  D: new Set(["D_CANDIDATE_REF_WRITE"]),
+  R: new Set(["R_REVIEW_EVIDENCE_WRITE"]),
+  P: new Set(["P_MERGE"])
+});
+
 function assignmentEnvelopeFromState(state, profile, observedAt) {
   if (!state?.assignment) return null;
   const a = state.assignment;
@@ -1011,14 +1018,30 @@ export class MultiRepoOrchestrator {
     targetBinding,
     preparedAt = new Date().toISOString()
   }) {
+    const allowed =
+      ROLE_MATERIAL_OPERATIONS[assignment?.role] ?? new Set();
+    if (!allowed.has(operationKind)) {
+      return { valid: false, reason: "MATERIAL_OPERATION_NOT_ALLOWLISTED" };
+    }
     if (
-      !operationKind ||
-      !operationKind.startsWith(String(assignment?.role ?? "") + "_")
+      operationKind === "P_MERGE" &&
+      !this.profile.publication?.boundary_operations?.includes("MERGE")
     ) {
-      return { valid: false, reason: "MATERIAL_OPERATION_ROLE_MISMATCH" };
+      return { valid: false, reason: "P_MERGE_NOT_CONFIGURED" };
     }
     if (!targetBinding || typeof targetBinding !== "object") {
       return { valid: false, reason: "MATERIAL_TARGET_BINDING_REQUIRED" };
+    }
+    const targetRepository =
+      targetBinding.repository ?? assignment.execution_repository?.repository;
+    if (
+      targetRepository &&
+      ![
+        this.profile.control_repository,
+        ...(this.profile.implementation_repositories ?? [])
+      ].includes(targetRepository)
+    ) {
+      return { valid: false, reason: "MATERIAL_TARGET_REPOSITORY_NOT_CONFIGURED" };
     }
 
     const workItem = {
