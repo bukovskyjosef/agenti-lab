@@ -21,7 +21,7 @@ Node.js 22.13+ is required because the reference operational store uses built-in
 
 ```bash
 cp example.env .env
-cp config/project-profile.example.json project-profile.json
+cp config/project-profile.example.json config/project-profile.json
 npm test
 npm run render-manifest > github-app-manifest.json
 npm start
@@ -90,7 +90,7 @@ jobs:
       - name: Verify current assignment
         env:
           AGENTI_ASSIGNMENT_JSON: ${{ inputs.assignment_json }}
-          AGENTI_O_URL: ${{ secrets.AGENTI_O_URL }}
+          AGENTI_O_VERIFY_URL: ${{ secrets.AGENTI_O_VERIFY_URL }}
           AGENTI_RECEIVER_VERIFY_SECRET: ${{ secrets.AGENTI_RECEIVER_VERIFY_SECRET }}
         run: node path/to/multi-repo-o/bin/verify-assignment.mjs
       - name: Run configured role adapter
