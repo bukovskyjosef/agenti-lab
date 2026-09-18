@@ -217,5 +217,20 @@
         }
       }
     ]
+  },
+  "work_item_claims": {
+    "mutation_domain": "github-actions-concurrency",
+    "recovery": {
+      "mode": "PLATFORM_RUN"
+    },
+    "material_write_fencing": "REQUIRED"
+  },
+  "claim_mechanism_capabilities": {
+    "linearizable_per_work_item_mutation_domain": true,
+    "all_projection_writers_share_domain": true,
+    "authoritative_claim_location": "O_PROJECTION",
+    "material_write_fencing": "SHARED_DOMAIN",
+    "supports_platform_run_recovery": true,
+    "supports_heartbeat_lease": false
   }
 }
