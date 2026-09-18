@@ -89,7 +89,8 @@ async function sourcePlan(config) {
     [join(profileRoot, "runtime"), ".agenti-runtime/runtime"],
     [join(REFERENCE_ROOT, "core"), ".agenti-runtime/core"],
     [join(REFERENCE_ROOT, "schemas"), ".agenti-runtime/schemas"],
-    [join(REFERENCE_ROOT, "adapters", "codex-action"), ".agenti-runtime/adapters/codex-action"]
+    [join(REFERENCE_ROOT, "adapters", "codex-action"), ".agenti-runtime/adapters/codex-action"],
+    [join(REFERENCE_ROOT, "conformance", "single-repo-actions"), ".agenti-runtime/conformance/single-repo-actions"]
   ];
   for (const [root, prefix] of copies) {
     if (!(await exists(root))) {
