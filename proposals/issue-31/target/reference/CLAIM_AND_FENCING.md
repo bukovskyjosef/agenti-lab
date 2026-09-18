@@ -46,9 +46,9 @@ Provider/model compute deliberately runs outside this state fence. Global reconc
 
 The control repository owns exactly one claim projection for the logical work item. Implementation repositories do not create independent claims.
 
-The App's SQLite `work_leases` table is an operational single-node/shared-database mutation mutex. O processing, receiver claim binding and execution-failure/T14 writes use the same `workItemKey` domain. GitHub `claim_control` remains reconstructable authority after operational DB loss.
+The bundled App uses one non-expiring in-process FIFO mutation fence per control work item across ordinary O processing, receiver claim binding, recovery/failure/T14, and material prepare/resolve. SQLite `work_leases` remain operational retry/queue aids and may expire without releasing the authoritative mutation fence. GitHub `claim_control` remains reconstructable authority after operational DB loss.
 
-A deployment that cannot provide one linearizable shared work-item mutation domain must fail doctor/conformance rather than silently run multi-instance with local-only locks. The bundled SQLite reference is explicitly single-instance; declared multi-instance use is rejected.
+A deployment that cannot provide one linearizable shared work-item mutation domain must fail doctor/conformance rather than silently run multi-instance with local-only locks. The bundled process-fence reference is explicitly single-instance; declared multi-instance use is rejected.
 
 ## Material-write fence
 
@@ -60,7 +60,7 @@ Before an A/D/R/P sink operation, the deterministic writer validates:
 
 D candidate writes and P publication derive deterministic `material_operation_id` values from work item + claim + assignment + operation + target.
 
-For the single-repo Actions profile the writer job itself holds the shared `agenti-state-...` fence across the sink call.
+For the single-repo Actions profile the writer job holds the shared `agenti-state-...` fence and first persists a claim-bound `PREPARED` material operation before D push or P merge. The operation is resolved after the sink. If the Actions run fails before semantic result durability, O queries the exact GitHub sink outcome before any claim recovery: proven NOT_APPLIED may retry; applied or ambiguous outcomes become `HUMAN_ACTION_REQUIRED` and never blind-redispatch.
 
 For remote multi-repo writers, `/material/prepare` first writes one exact claim-bound `PREPARED` operation into the authoritative control projection under the shared work-item mutex. O safe-holds conflicting semantic mutations until `/material/resolve` records APPLIED / NOT_APPLIED / HUMAN_ACTION_REQUIRED. The PREPARED intent therefore fixes the legal ordering before the remote sink begins without giving O role/P credentials.
 
