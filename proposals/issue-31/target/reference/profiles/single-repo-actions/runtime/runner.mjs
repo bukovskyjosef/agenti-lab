@@ -137,6 +137,29 @@ export async function callback(github, runtimeConfig, issueNumber, assignmentId,
 const CAPACITY_MARKER = "agenti-capacity:v1";
 const BILLING_SAFETY_MARKER = "agenti-billing-safety:v1";
 
+function pendingHumanStop(comments, profile) {
+  const humanIds = new Set(
+    (profile.human?.principals ?? []).map((principal) =>
+      Number(principal.actor_id)
+    )
+  );
+  const commands = comments
+    .filter((comment) => humanIds.has(Number(comment.user?.id)))
+    .map((comment) => {
+      const body = (comment.body ?? "").trim();
+      if (/^\/agenti\s+stop(?:\s|$)/i.test(body)) {
+        return { kind: "stop", comment };
+      }
+      if (/^\/agenti\s+reopen(?:\s|$)/i.test(body)) {
+        return { kind: "reopen", comment };
+      }
+      return null;
+    })
+    .filter(Boolean);
+  const latest = commands.at(-1);
+  return latest?.kind === "stop" ? latest : null;
+}
+
 function trustedRoutingPayloads(comments, marker) {
   return comments
     .filter(
@@ -231,6 +254,14 @@ export async function preClaimCurrentness({
     )
   ) {
     return { current: false, reason: "HUMAN_INPUT_PENDING" };
+  }
+  const stop = pendingHumanStop(comments, runtime.projectProfile);
+  if (stop) {
+    return {
+      current: false,
+      reason: "HUMAN_STOP_PENDING",
+      stop_comment_id: stop.comment.id
+    };
   }
 
   const issue = await github.getIssue(state.work_item.issue_number);
