@@ -4,6 +4,13 @@ export class GitHubApi {
     const [owner, repo] = repository.split("/");
     return `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}${suffix}`;
   }
+  async getRepository(repository) {
+    return this.client.request(
+      repository,
+      this.repoPath(repository),
+      { permissions: { metadata: "read" } }
+    );
+  }
   async getIssue(repository, issueNumber) {
     return this.client.request(repository, this.repoPath(repository, `/issues/${issueNumber}`), { permissions: { issues: "read" } });
   }
