@@ -15,7 +15,9 @@
     "identities",
     "release_authorization",
     "publication",
-    "state_projection"
+    "state_projection",
+    "work_item_claims",
+    "claim_mechanism_capabilities"
   ],
   "properties": {
     "schema_version": {
@@ -258,6 +260,93 @@
           "items": {
             "$ref": "#/$defs/routingPolicy"
           }
+        }
+      }
+    },
+    "work_item_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mutation_domain",
+        "recovery",
+        "material_write_fencing"
+      ],
+      "properties": {
+        "mutation_domain": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recovery": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "MANUAL_H",
+                "PLATFORM_RUN",
+                "EXPIRING_HEARTBEAT"
+              ]
+            }
+          }
+        },
+        "lease": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ttl_seconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "heartbeat_interval_seconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "expiry_grace_seconds": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "material_write_fencing": {
+          "const": "REQUIRED"
+        }
+      }
+    },
+    "claim_mechanism_capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "linearizable_per_work_item_mutation_domain",
+        "all_projection_writers_share_domain",
+        "authoritative_claim_location",
+        "material_write_fencing",
+        "supports_platform_run_recovery",
+        "supports_heartbeat_lease"
+      ],
+      "properties": {
+        "linearizable_per_work_item_mutation_domain": {
+          "const": true
+        },
+        "all_projection_writers_share_domain": {
+          "const": true
+        },
+        "authoritative_claim_location": {
+          "const": "O_PROJECTION"
+        },
+        "material_write_fencing": {
+          "enum": [
+            "SHARED_DOMAIN",
+            "NATIVE_EQUIVALENT"
+          ]
+        },
+        "supports_platform_run_recovery": {
+          "type": "boolean"
+        },
+        "supports_heartbeat_lease": {
+          "type": "boolean"
         }
       }
     }
