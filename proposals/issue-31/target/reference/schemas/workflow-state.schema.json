@@ -1,0 +1,1094 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenti.dev/schemas/workflow-state.schema.json",
+  "title": "Agenti bounded O workflow-state projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "runtime_version",
+    "work_item",
+    "state_version",
+    "lifecycle",
+    "contract",
+    "assignment",
+    "candidate",
+    "checks",
+    "review",
+    "human_requests",
+    "release_authorization",
+    "publication",
+    "run_receipts",
+    "failure",
+    "stop",
+    "updated_by",
+    "claim_control",
+    "material_operation"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "runtime_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "work_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "control_repository",
+        "issue_number",
+        "kind"
+      ],
+      "properties": {
+        "control_repository": {
+          "type": "string",
+          "pattern": "^[^/]+/[^/]+$"
+        },
+        "issue_number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "kind": {
+          "enum": [
+            "executable",
+            "parent_intent"
+          ]
+        }
+      }
+    },
+    "state_version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "lifecycle": {
+      "enum": [
+        "INTAKE",
+        "ANALYSIS",
+        "BLOCKED",
+        "READY",
+        "IN_PROGRESS",
+        "IN_REVIEW",
+        "CHANGES_REQUIRED",
+        "APPROVED",
+        "DONE",
+        "STOPPED"
+      ]
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_ref",
+        "accepted_revision",
+        "digest"
+      ],
+      "properties": {
+        "source_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accepted_revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "parent": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "issue_number",
+            "inherited_input_digest"
+          ],
+          "properties": {
+            "issue_number": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "inherited_input_digest": {
+              "$ref": "#/$defs/digest"
+            }
+          }
+        }
+      }
+    },
+    "assignment": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "assignment_id",
+        "role",
+        "purpose",
+        "issued_from_state_version",
+        "bound_state_version",
+        "fingerprint",
+        "capability_profile",
+        "dispatch_status"
+      ],
+      "properties": {
+        "assignment_id": {
+          "type": "string",
+          "minLength": 12
+        },
+        "role": {
+          "enum": [
+            "A",
+            "D",
+            "R",
+            "P"
+          ]
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        },
+        "issued_from_state_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bound_state_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/digest"
+        },
+        "capability_profile": {
+          "enum": [
+            "A_READ_ANALYZE",
+            "D_WORKSPACE_WRITE",
+            "R_READ_REVIEW",
+            "P_PUBLISH"
+          ]
+        },
+        "dispatch_status": {
+          "enum": [
+            "pending",
+            "dispatched",
+            "running",
+            "completed",
+            "stale"
+          ]
+        },
+        "workflow_run_id": {
+          "type": [
+            "string",
+            "integer",
+            "null"
+          ]
+        },
+        "must_differ_from_execution_instances": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "semantic_work_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "execution_route": {
+          "$ref": "#/$defs/executionRoute"
+        }
+      }
+    },
+    "candidate": {
+      "$ref": "#/$defs/candidate"
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "required_set_digest",
+        "evidence_refs"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "NOT_REQUIRED",
+            "PENDING",
+            "PASSED",
+            "FAILED",
+            "STALE"
+          ]
+        },
+        "required_set_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceRef"
+          }
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "candidate_digest",
+        "outcome",
+        "evidence_ref",
+        "author_execution_instances"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "NOT_STARTED",
+            "PENDING",
+            "CURRENT",
+            "STALE",
+            "INVALID"
+          ]
+        },
+        "candidate_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "outcome": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "APPROVED",
+            "CHANGES_REQUIRED",
+            "DECISION_REQUIRED",
+            null
+          ]
+        },
+        "evidence_ref": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/evidenceRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "author_execution_instances": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "human_requests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active",
+        "recent_refs"
+      ],
+      "properties": {
+        "active": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "request_id",
+              "type",
+              "status",
+              "context_digest",
+              "resolution_route",
+              "request_ref"
+            ],
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "enum": [
+                  "CLARIFICATION",
+                  "DECISION",
+                  "HUMAN_ACTION"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "PENDING",
+                  "RESOLVED",
+                  "STALE"
+                ]
+              },
+              "raised_by": {
+                "enum": [
+                  "A",
+                  "D",
+                  "R",
+                  "P",
+                  "O"
+                ]
+              },
+              "context_digest": {
+                "$ref": "#/$defs/digest"
+              },
+              "resolution_route": {
+                "enum": [
+                  "ANALYST_REEVALUATE",
+                  "RESUME_CURRENT_AFTER_RECHECK",
+                  "SPECIAL_RELEASE_GATE",
+                  "STOP_REOPEN",
+                  "ROLE_REASSIGNMENT"
+                ]
+              },
+              "request_ref": {
+                "$ref": "#/$defs/evidenceRef"
+              },
+              "response_ref": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/evidenceRef"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "recent_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceRef"
+          }
+        }
+      }
+    },
+    "release_authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "authorization_id",
+        "candidate_digest",
+        "target_digest",
+        "gate_digest",
+        "context_digest",
+        "request_ref",
+        "response_ref"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "NOT_REQUIRED",
+            "PENDING",
+            "GRANTED",
+            "REJECTED",
+            "STALE"
+          ]
+        },
+        "authorization_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "candidate_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "target_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "gate_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "context_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "request_ref": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/evidenceRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "response_ref": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/evidenceRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "human_actor_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "candidate_digest",
+        "evidence_refs",
+        "published_identity"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "NOT_STARTED",
+            "ASSIGNED",
+            "IN_PROGRESS",
+            "SUCCEEDED",
+            "PARTIAL",
+            "FAILED",
+            "STALE"
+          ]
+        },
+        "candidate_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceRef"
+          }
+        },
+        "published_identity": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "repository_or_artifact",
+            "immutable_id"
+          ],
+          "properties": {
+            "repository_or_artifact": {
+              "type": "string",
+              "minLength": 1
+            },
+            "immutable_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "run_receipts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fingerprint",
+          "assignment_id",
+          "execution_instance_id"
+        ],
+        "properties": {
+          "fingerprint": {
+            "$ref": "#/$defs/digest"
+          },
+          "assignment_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "execution_instance_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "role": {
+            "enum": [
+              "A",
+              "D",
+              "R",
+              "P"
+            ]
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 1
+          },
+          "semantic_work_digest": {
+            "$ref": "#/$defs/digest"
+          },
+          "freshness_fingerprint": {
+            "$ref": "#/$defs/digest"
+          },
+          "completion_status": {
+            "enum": [
+              "APPLICABLE_COMPLETED",
+              "FAILED_BEFORE_RESULT",
+              "STALE"
+            ]
+          },
+          "claim_id": {
+            "type": "string",
+            "pattern": "^clm-"
+          },
+          "claim_generation": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active_ref",
+        "retry_reason",
+        "non_convergent"
+      ],
+      "properties": {
+        "active_ref": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/evidenceRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retry_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "non_convergent": {
+          "type": "boolean"
+        }
+      }
+    },
+    "stop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_ref"
+      ],
+      "properties": {
+        "record_ref": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/evidenceRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "updated_by": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "o_run_id",
+        "transition_id",
+        "idempotence_key"
+      ],
+      "properties": {
+        "o_run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transition_id": {
+          "type": "string",
+          "pattern": "^T(0[1-9]|1[0-9])$"
+        },
+        "idempotence_key": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "execution_routing": {
+      "$ref": "#/$defs/executionRouting"
+    },
+    "claim_control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_version",
+        "active_claim",
+        "last_terminal"
+      ],
+      "properties": {
+        "claim_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "active_claim": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "last_terminal": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "material_operation": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "generation",
+        "digest",
+        "members"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "none",
+            "single",
+            "composite"
+          ]
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "repository",
+              "head_sha"
+            ],
+            "properties": {
+              "repository": {
+                "type": "string",
+                "pattern": "^[^/]+/[^/]+$"
+              },
+              "pr_number": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "head_sha": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{40}$"
+              },
+              "base_ref_or_sha": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "acceptedEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_kind",
+        "repository",
+        "object_id",
+        "actor_id",
+        "accepted_revision",
+        "payload_digest",
+        "normalized_outcome",
+        "context_binding"
+      ],
+      "properties": {
+        "evidence_kind": {
+          "enum": [
+            "issue_comment",
+            "pr_review",
+            "review_comment",
+            "role_result_comment",
+            "publication_comment",
+            "other_mutable"
+          ]
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^[^/]+/[^/]+$"
+        },
+        "object_id": {
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "actor_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "accepted_revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "payload_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "normalized_outcome": {
+          "type": "string",
+          "minLength": 1
+        },
+        "context_binding": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "immutableEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_kind",
+        "repository",
+        "immutable_id"
+      ],
+      "properties": {
+        "evidence_kind": {
+          "enum": [
+            "commit",
+            "artifact",
+            "deployment",
+            "release",
+            "check_run",
+            "other_immutable"
+          ]
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^[^/]+/[^/]+$"
+        },
+        "immutable_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "evidenceRef": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/acceptedEvidence"
+        },
+        {
+          "$ref": "#/$defs/immutableEvidence"
+        }
+      ]
+    },
+    "executionRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_digest",
+        "runner_candidate_id",
+        "adapter_id",
+        "adapter_version",
+        "provider_ref",
+        "billing_mode",
+        "paid_authority_digest",
+        "capacity_observation_digest",
+        "billing_safety_digest",
+        "routing_attempt_generation"
+      ],
+      "properties": {
+        "policy_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "runner_candidate_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "adapter_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "adapter_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "billing_mode": {
+          "enum": [
+            "NONE",
+            "INCLUDED_ALLOWANCE",
+            "PREPAID_CREDIT",
+            "METERED"
+          ]
+        },
+        "paid_authority_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "capacity_observation_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "billing_safety_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "routing_attempt_generation": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "executionRouting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_digest",
+        "pending",
+        "selected_runner_candidate_id",
+        "routing_attempt_generation",
+        "attempted_candidates",
+        "wait"
+      ],
+      "properties": {
+        "policy_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "pending": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "role",
+            "purpose",
+            "semantic_work_digest",
+            "source_transition_id",
+            "resume_lifecycle"
+          ],
+          "properties": {
+            "role": {
+              "enum": [
+                "A",
+                "D",
+                "R",
+                "P"
+              ]
+            },
+            "purpose": {
+              "type": "string",
+              "minLength": 1
+            },
+            "semantic_work_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "source_transition_id": {
+              "type": "string",
+              "pattern": "^T(0[1-9]|1[0-9])$"
+            },
+            "resume_lifecycle": {
+              "enum": [
+                "ANALYSIS",
+                "BLOCKED",
+                "READY",
+                "IN_PROGRESS",
+                "IN_REVIEW",
+                "CHANGES_REQUIRED",
+                "APPROVED"
+              ]
+            }
+          }
+        },
+        "selected_runner_candidate_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "routing_attempt_generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "attempted_candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "candidate_id",
+              "capacity_status",
+              "observation_digest",
+              "ineligible_reason"
+            ],
+            "properties": {
+              "candidate_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "capacity_status": {
+                "enum": [
+                  "AVAILABLE",
+                  "TEMPORARILY_EXHAUSTED",
+                  "RATE_LIMITED",
+                  "UNAVAILABLE",
+                  "UNKNOWN"
+                ]
+              },
+              "observation_digest": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              },
+              "ineligible_reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "wait": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "reason",
+            "candidate_id",
+            "not_before",
+            "max_wait_deadline"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "NONE",
+                "WAITING_CAPACITY"
+              ]
+            },
+            "reason": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                null,
+                "TEMPORARILY_EXHAUSTED",
+                "RATE_LIMITED",
+                "NO_AUTHORIZED_CAPACITY"
+              ]
+            },
+            "candidate_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "not_before": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "max_wait_deadline": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            }
+          }
+        }
+      }
+    }
+  }
+}

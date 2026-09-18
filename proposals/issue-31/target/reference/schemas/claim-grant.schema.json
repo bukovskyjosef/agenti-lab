@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenti.local/schemas/claim-grant.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "claim_id",
+    "claim_generation",
+    "assignment_id",
+    "claim_version",
+    "binding",
+    "owner_execution_instance_id",
+    "granted_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "claim_id": {
+      "type": "string",
+      "pattern": "^clm-"
+    },
+    "claim_generation": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "assignment_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "claim_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "binding": {
+      "type": "object"
+    },
+    "owner_execution_instance_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "granted_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

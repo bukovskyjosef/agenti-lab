@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenti.dev/schemas/capacity-observation.schema.json",
+  "title": "Agenti provider-neutral runner capacity observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runner_candidate_id",
+    "status",
+    "observed_at",
+    "source",
+    "evidence_digest"
+  ],
+  "properties": {
+    "runner_candidate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "AVAILABLE",
+        "TEMPORARILY_EXHAUSTED",
+        "RATE_LIMITED",
+        "UNAVAILABLE",
+        "UNKNOWN"
+      ]
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "valid_until": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "retry_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "retry_after_seconds": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "remaining": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "unit"
+      ],
+      "properties": {
+        "value": {
+          "type": "number",
+          "minimum": 0
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "trust"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "PROVIDER_API",
+            "PROVIDER_CLI",
+            "ADAPTER_PREFLIGHT",
+            "EXECUTION_OUTCOME"
+          ]
+        },
+        "trust": {
+          "enum": [
+            "PROVIDER_REPORTED",
+            "ADAPTER_OBSERVED"
+          ]
+        }
+      }
+    },
+    "evidence_digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

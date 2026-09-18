@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "runtime_version": "0.1.0-child1",
+  "work_item": {
+    "control_repository": "example/product",
+    "issue_number": 42,
+    "kind": "executable"
+  },
+  "state_version": 3,
+  "lifecycle": "ANALYSIS",
+  "contract": {
+    "source_ref": "issue:42",
+    "accepted_revision": "2026-09-18T09:00:00Z",
+    "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "parent": null
+  },
+  "assignment": {
+    "assignment_id": "asg-analyst-current",
+    "role": "A",
+    "purpose": "SHAPE_INTENT",
+    "issued_from_state_version": 2,
+    "bound_state_version": 3,
+    "fingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "capability_profile": "A_READ_ANALYZE",
+    "dispatch_status": "running",
+    "workflow_run_id": "101",
+    "must_differ_from_execution_instances": []
+  },
+  "candidate": {
+    "kind": "none",
+    "generation": 0,
+    "digest": null,
+    "members": []
+  },
+  "checks": {
+    "status": "NOT_REQUIRED",
+    "required_set_digest": null,
+    "evidence_refs": []
+  },
+  "review": {
+    "status": "NOT_STARTED",
+    "candidate_digest": null,
+    "outcome": null,
+    "evidence_ref": null,
+    "author_execution_instances": []
+  },
+  "human_requests": {
+    "active": [],
+    "recent_refs": []
+  },
+  "release_authorization": {
+    "status": "NOT_REQUIRED",
+    "authorization_id": null,
+    "candidate_digest": null,
+    "target_digest": null,
+    "gate_digest": null,
+    "context_digest": null,
+    "request_ref": null,
+    "response_ref": null,
+    "human_actor_id": null
+  },
+  "publication": {
+    "status": "NOT_STARTED",
+    "candidate_digest": null,
+    "evidence_refs": [],
+    "published_identity": null
+  },
+  "run_receipts": {},
+  "failure": {
+    "active_ref": null,
+    "retry_reason": null,
+    "non_convergent": false
+  },
+  "stop": {
+    "record_ref": null
+  },
+  "updated_by": {
+    "o_run_id": "o-3",
+    "transition_id": "T01",
+    "idempotence_key": "agenti:bootstrap"
+  },
+  "claim_control": {
+    "claim_version": 0,
+    "active_claim": null,
+    "last_terminal": null
+  },
+  "material_operation": null
+}
