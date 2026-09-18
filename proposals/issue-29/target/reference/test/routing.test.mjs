@@ -603,3 +603,241 @@ test("R T14 reroute preserves D-author exclusion set", () => {
     ["exec-d-author"]
   );
 });
+
+
+test("completed semantic D run suppresses later capacity-triggered duplicate", () => {
+  const state = structuredClone(baseState);
+  const relevantInputs = {
+    required_evidence_digest: null,
+    target_digest: null,
+    human_input_digest: null,
+    human_decision_digest: null,
+    publication_target_digest: null,
+    parent_input_digest: null
+  };
+  const semantic = semanticWorkDigest({
+    state: {
+      ...state,
+      lifecycle: "IN_PROGRESS"
+    },
+    role: "D",
+    purpose: "IMPLEMENT_CURRENT_CONTRACT",
+    relevant_inputs: relevantInputs
+  });
+  state.run_receipts["asg-old-complete"] = {
+    fingerprint: digest({ freshness: "old" }),
+    assignment_id: "asg-old-complete",
+    execution_instance_id: "exec-d-old",
+    role: "D",
+    purpose: "IMPLEMENT_CURRENT_CONTRACT",
+    semantic_work_digest: semantic,
+    freshness_fingerprint: digest({ freshness: "old" }),
+    completion_status: "APPLICABLE_COMPLETED"
+  };
+
+  const action = evaluate(
+    profile,
+    state,
+    aReadySnapshot({
+      capacities: [capacity("included-primary", "AVAILABLE")]
+    }),
+    { observed_at: OBSERVED },
+    transitionTable
+  );
+  assert.equal(action.kind, "NO_OP");
+  assert.equal(action.reason, "SEMANTIC_WORK_ALREADY_COMPLETED");
+});
+
+test("durable routing wait survives cold state render/parse reconstruction", () => {
+  const action = routeD({
+    capacities: [
+      capacity("included-primary", "TEMPORARILY_EXHAUSTED", {
+        retryAt: "2026-09-18T12:30:00Z"
+      }),
+      capacity("included-secondary", "RATE_LIMITED", {
+        retryAt: "2026-09-18T12:20:00Z"
+      })
+    ]
+  });
+  const state = projectAction(structuredClone(baseState), action, "o-wait");
+  const reconstructed = JSON.parse(
+    JSON.stringify(state)
+  );
+  assert.equal(reconstructed.lifecycle, "BLOCKED");
+  assert.equal(
+    reconstructed.execution_routing.wait.status,
+    "WAITING_CAPACITY"
+  );
+  assert.equal(
+    reconstructed.execution_routing.pending.role,
+    "D"
+  );
+  assert.equal(
+    reconstructed.execution_routing.pending.semantic_work_digest,
+    state.execution_routing.pending.semantic_work_digest
+  );
+});
+
+test("contract drift while waiting wins over old routing wait and invalidates it", () => {
+  const waitAction = routeD({
+    capacities: [
+      capacity("included-primary", "TEMPORARILY_EXHAUSTED", {
+        retryAt: "2026-09-18T12:30:00Z"
+      }),
+      capacity("included-secondary", "RATE_LIMITED", {
+        retryAt: "2026-09-18T12:20:00Z"
+      })
+    ]
+  });
+  const waiting = projectAction(
+    structuredClone(baseState),
+    waitAction,
+    "o-wait-drift"
+  );
+  const changedContract = digest({ contract: "changed" });
+  const action = evaluate(
+    profile,
+    waiting,
+    {
+      contract_digest: changedContract,
+      contract_revision: "2026-09-18T12:05:00Z",
+      capacity_observations: [],
+      billing_safety_observations: []
+    },
+    { observed_at: "2026-09-18T12:10:00Z" },
+    transitionTable
+  );
+  assert.equal(action.kind, "INVALIDATE");
+  assert.equal(action.earliest_affected_point, "ANALYSIS");
+});
+
+test("P routing remains deterministic/non-billed and metered P is doctor-invalid", () => {
+  const good = selectRunnerCandidate({
+    profile,
+    role: "P",
+    purpose: "PUBLISH_CURRENT_CANDIDATE",
+    capability_profile: "P_PUBLISH",
+    semantic_work_digest: digest({ publish: 1 }),
+    capacity_observations: [],
+    billing_safety_observations: [],
+    routing_attempt_generation: 0,
+    observed_at: OBSERVED
+  });
+  assert.equal(good.kind, "SELECTED");
+  assert.equal(good.execution_route.billing_mode, "NONE");
+  assert.equal(
+    profile.execution_routing.runner_catalog[
+      good.execution_route.runner_candidate_id
+    ].execution_kind,
+    "DETERMINISTIC"
+  );
+
+  const invalid = structuredClone(profile);
+  invalid.execution_routing.runner_catalog["paid-p"] = {
+    ...structuredClone(
+      invalid.execution_routing.runner_catalog["metered-api"]
+    ),
+    capability_profiles: ["P_PUBLISH"]
+  };
+  invalid.execution_routing.policies[1].candidates = ["paid-p"];
+  assert.ok(
+    validateRoutingConfiguration(invalid)
+      .some((error) => error.includes("maps P to non-deterministic"))
+  );
+});
+
+test("same provider D/R remains independent through distinct execution instance", () => {
+  const state = structuredClone(baseState);
+  state.lifecycle = "IN_REVIEW";
+  state.assignment = {
+    ...state.assignment,
+    assignment_id: "asg-r-same-provider",
+    role: "R",
+    purpose: "INDEPENDENT_REVIEW",
+    capability_profile: "R_READ_REVIEW",
+    semantic_work_digest: digest({ review: "same-provider" }),
+    execution_route: {
+      policy_digest: digest({ p: "r" }),
+      runner_candidate_id: "included-primary",
+      adapter_id: "fake-subscription-primary",
+      adapter_version: "1",
+      provider_ref: "provider-a",
+      billing_mode: "INCLUDED_ALLOWANCE",
+      paid_authority_digest: null,
+      capacity_observation_digest: null,
+      billing_safety_digest: null,
+      routing_attempt_generation: 0
+    },
+    must_differ_from_execution_instances: ["exec-d-same-provider"]
+  };
+  const assignment = {
+    schema_version: 1,
+    assignment_id: state.assignment.assignment_id,
+    issued_at: OBSERVED,
+    role: "R",
+    purpose: "INDEPENDENT_REVIEW",
+    work_item: state.work_item,
+    execution_repository: null,
+    state: {
+      version: state.state_version,
+      fingerprint: state.assignment.fingerprint,
+      contract_digest: state.contract.digest
+    },
+    candidate: {
+      kind: state.candidate.kind,
+      digest: state.candidate.digest,
+      members: state.candidate.members
+    },
+    semantic_work_digest: state.assignment.semantic_work_digest,
+    execution_route: state.assignment.execution_route,
+    context_entrypoints: [],
+    capability_profile: "R_READ_REVIEW",
+    independence: {
+      required: true,
+      must_differ_from_execution_instances: ["exec-d-same-provider"],
+      enforcement_mechanism: "fresh-wrapper"
+    },
+    completion: {
+      result_schema_version: 1,
+      result_marker: "agenti-role-result:v1",
+      callback_event: "agenti.role-result"
+    }
+  };
+  state.assignment.bound_state_version = state.state_version;
+  state.assignment.fingerprint = assignment.state.fingerprint;
+
+  const normalizedResult = {
+    trusted: {
+      assignment_id: assignment.assignment_id,
+      observed_state_version: state.state_version,
+      observed_fingerprint: assignment.state.fingerprint,
+      semantic_work_digest: assignment.semantic_work_digest,
+      execution_route_digest: digest(assignment.execution_route),
+      actual_billing_mode: "INCLUDED_ALLOWANCE",
+      execution_attestation: {
+        adapter_id: "fake-subscription-primary",
+        adapter_version: "1",
+        execution_instance_id: "exec-r-same-provider",
+        platform_run: {
+          provider: "github-actions",
+          run_id: "r1",
+          run_attempt: 1,
+          job_or_worker_id: "review"
+        },
+        provider_session: {
+          mode: "fresh",
+          provider_session_id: null
+        },
+        issued_for_assignment: assignment.assignment_id,
+        attested_by: "deterministic-wrapper"
+      }
+    }
+  };
+  const accepted = applyRoleResult({
+    state,
+    assignment,
+    normalizedResult,
+    projectProfile: profile
+  });
+  assert.equal(accepted.accepted, true);
+});
