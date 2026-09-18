@@ -172,6 +172,7 @@ export function generateAssignment({
     context_entrypoints,
     capability_profile: ROLE_CAPABILITIES[role],
     independence,
+    claim: { required: true },
     completion: {
       result_schema_version: 1,
       result_marker: ROLE_RESULT_MARKER,
