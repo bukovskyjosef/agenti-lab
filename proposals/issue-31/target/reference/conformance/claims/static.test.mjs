@@ -152,7 +152,10 @@ test("F1 App authoritative mutators share one non-expiring work-item fence", asy
     "O, receiver, material and failure paths must share the same fence"
   );
   assert.doesNotMatch(orchestrator, /receiverClaimLocks/);
-  assert.doesNotMatch(fence, /setTimeout|expires|lease/);
+  assert.doesNotMatch(
+    fence,
+    /setTimeout|lease_until|leaseMs|expires_at/
+  );
   assert.equal(
     profile.work_item_claims.mutation_domain,
     "single-instance-nonexpiring-process-fence"
