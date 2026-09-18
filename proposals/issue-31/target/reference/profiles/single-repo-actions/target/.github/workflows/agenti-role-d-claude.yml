@@ -147,6 +147,10 @@ jobs:
           node .agenti-runtime/runtime/candidate-writer.mjs             "${{ inputs.issue_number }}"             "${{ inputs.assignment_id }}"             "$RUNNER_TEMP/agenti-run/proposal.json"             "$RUNNER_TEMP/agenti-run/run-context.json"             "$RUNNER_TEMP/agenti-run/change.diff"
 
   capacity_failure:
+    concurrency:
+      group: agenti-state-${{ github.repository_id }}-${{ inputs.issue_number }}
+      cancel-in-progress: false
+      queue: max
     needs: [preflight, model]
     if: always() && needs.preflight.outputs.skip != 'true' && needs.model.outputs.capacity_status != ''
     runs-on: ubuntu-latest
