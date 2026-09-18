@@ -437,3 +437,124 @@ test("F2 App failure writer marks accepted UNAVAILABLE as T14-routable", () => {
     assignment.semantic_work_digest
   );
 });
+
+test("multi-repo material writer uses durable PREPARED fence before sink", async () => {
+  const issue = {
+    number: 42,
+    title: "Material fence",
+    body: "Stable contract",
+    updated_at: OBSERVED,
+    labels: [{ name: "agenti:managed" }]
+  };
+  const built = buildRoutedDState(issue);
+  const gh = fakeGitHub({ issue, state: built.state });
+  const store = new OperationalStore(":memory:");
+  const orchestrator = new MultiRepoOrchestrator({
+    gh,
+    profile,
+    core,
+    transitionTable,
+    store,
+    trustedResultActorIds: new Set([111]),
+    trustedStateAppId: APP_ID
+  });
+  const assignment = assignmentEnvelope(built.state);
+  const active = built.state.claim_control.active_claim;
+  const beforeClaimVersion = built.state.claim_control.claim_version;
+
+  const prepared = await orchestrator.prepareMaterialWrite({
+    assignment,
+    runnerRepository: "acme/service-a",
+    workflowRunId: "7001",
+    workflowRunAttempt: "1",
+    claimId: active.claim_id,
+    claimGeneration: active.claim_generation,
+    operationKind: "D_CANDIDATE_REF_WRITE",
+    targetBinding: {
+      repository: "acme/service-a",
+      ref: "refs/heads/agenti/issue-42",
+      expected_base: "main"
+    },
+    preparedAt: OBSERVED
+  });
+
+  assert.equal(prepared.valid, true);
+  assert.equal(prepared.prepared, true);
+  assert.equal(
+    gh.currentState().material_operation.status,
+    "PREPARED"
+  );
+  assert.equal(
+    gh.currentState().claim_control.claim_version,
+    beforeClaimVersion + 1
+  );
+
+  const held = await orchestrator.processWorkItem(
+    {
+      control_repository: "acme/control",
+      issue_number: 42,
+      kind: "executable"
+    },
+    OBSERVED
+  );
+  assert.equal(held.safe_hold, true);
+  assert.equal(held.action.reason, "MATERIAL_OPERATION_IN_FLIGHT");
+
+  const operationId =
+    gh.currentState().material_operation.material_operation_id;
+  const resolved = await orchestrator.resolveMaterialWrite({
+    assignment,
+    runnerRepository: "acme/service-a",
+    workflowRunId: "7001",
+    workflowRunAttempt: "1",
+    claimId: active.claim_id,
+    claimGeneration: active.claim_generation,
+    materialOperationId: operationId,
+    outcome: "APPLIED",
+    evidenceRef: "git-ref:acme/service-a@deadbeef",
+    observedAt: OBSERVED
+  });
+  assert.equal(resolved.valid, true);
+  assert.equal(resolved.resolved, true);
+  assert.equal(resolved.idempotent, false);
+  assert.equal(gh.currentState().material_operation.status, "APPLIED");
+
+  const duplicate = await orchestrator.resolveMaterialWrite({
+    assignment,
+    runnerRepository: "acme/service-a",
+    workflowRunId: "7001",
+    workflowRunAttempt: "1",
+    claimId: active.claim_id,
+    claimGeneration: active.claim_generation,
+    materialOperationId: operationId,
+    outcome: "APPLIED",
+    evidenceRef: "git-ref:acme/service-a@deadbeef",
+    observedAt: OBSERVED
+  });
+  assert.equal(duplicate.valid, true);
+  assert.equal(duplicate.idempotent, true);
+
+  const reprepare = await orchestrator.prepareMaterialWrite({
+    assignment,
+    runnerRepository: "acme/service-a",
+    workflowRunId: "7001",
+    workflowRunAttempt: "1",
+    claimId: active.claim_id,
+    claimGeneration: active.claim_generation,
+    operationKind: "D_CANDIDATE_REF_WRITE",
+    targetBinding: {
+      repository: "acme/service-a",
+      ref: "refs/heads/agenti/issue-42",
+      expected_base: "main"
+    },
+    preparedAt: OBSERVED
+  });
+  assert.equal(reprepare.valid, true);
+  assert.equal(reprepare.prepared, false);
+  assert.equal(
+    reprepare.reason,
+    "MATERIAL_OPERATION_ALREADY_APPLIED"
+  );
+
+  store.close();
+});
