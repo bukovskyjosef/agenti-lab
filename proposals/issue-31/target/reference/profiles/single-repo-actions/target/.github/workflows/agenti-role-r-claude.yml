@@ -12,6 +12,10 @@ concurrency:
 
 jobs:
   preflight:
+    concurrency:
+      group: agenti-state-${{ github.repository_id }}-${{ inputs.issue_number }}
+      cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -106,6 +110,10 @@ jobs:
           if-no-files-found: error
 
   finalize:
+    concurrency:
+      group: agenti-state-${{ github.repository_id }}-${{ inputs.issue_number }}
+      cancel-in-progress: false
+      queue: max
     needs: [preflight, model]
     if: needs.preflight.outputs.skip != 'true' && needs.model.outputs.provider_outcome == 'success'
     runs-on: ubuntu-latest
