@@ -13,7 +13,7 @@ This avoids relying on branch ancestry to pretend the three independently approv
 
 ## Executed combined proof
 
-GitHub-hosted run `35379943202` on implementation head `b07ca65e5122a1f9ff5df4276343c891b49138be`:
+GitHub-hosted combined validation has been executed successfully against the complete Child #29 implementation/review target. The authoritative run ID and exact PR head are recorded durably on Issue #29 / its review PR so this file does not self-invalidate when final close-out metadata is updated:
 
 - immutable dependency materialization: PASS
 - all assembled `.mjs` syntax: PASS
@@ -27,7 +27,7 @@ GitHub-hosted run `35379943202` on implementation head `b07ca65e5122a1f9ff5df427
 - Child 5 combined exact-target validation: **OK**
 - integrated multi-repo Docker build: **PASS**
 
-The final review head will be revalidated after review metadata is complete. After the final green run the temporary branch-only validation workflow will be deleted; the final exact R head must differ from that tested head only by deletion of that temporary workflow.
+The complete review metadata is included in the final validation pass. After that green run, the temporary branch-only validation workflow is deleted; the exact R head must differ from the tested head only by deletion of that temporary workflow.
 
 ## Conformance matrix
 
