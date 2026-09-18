@@ -648,77 +648,88 @@ export class MultiRepoOrchestrator {
       return { accepted: false, reason: "WORK_ITEM_NOT_IN_CONTROL_REPOSITORY" };
     }
 
-    return this.withReceiverClaimMutex(workItem, async () => {
-      const reconstructed = await this.reconstruct(workItem, observedAt);
-      if (!assignmentMatchesState(
-        assignment,
-        reconstructed.state,
-        this.profile,
-        this.core
-      )) {
-        return { accepted: false, reason: "ASSIGNMENT_NOT_CURRENT" };
-      }
+    const evidenceWrite = await this.withReceiverClaimMutex(
+      workItem,
+      async () => {
+        const reconstructed = await this.reconstruct(workItem, observedAt);
+        if (!assignmentMatchesState(
+          assignment,
+          reconstructed.state,
+          this.profile,
+          this.core
+        )) {
+          return { accepted: false, reason: "ASSIGNMENT_NOT_CURRENT" };
+        }
 
-      const verified = await this.verifyRunnerWorkflowRun({
-        assignment,
-        runnerRepository,
-        workflowRunId,
-        workflowRunAttempt
-      });
-      if (!verified.valid) {
-        return { accepted: false, reason: verified.reason };
-      }
+        const verified = await this.verifyRunnerWorkflowRun({
+          assignment,
+          runnerRepository,
+          workflowRunId,
+          workflowRunAttempt
+        });
+        if (!verified.valid) {
+          return { accepted: false, reason: verified.reason };
+        }
 
-      const currentOwner = normalizedRunId(
-        reconstructed.state.assignment?.workflow_run_id
-      );
-      if (currentOwner !== verified.run_id) {
+        const currentOwner = normalizedRunId(
+          reconstructed.state.assignment?.workflow_run_id
+        );
+        if (currentOwner !== verified.run_id) {
+          return {
+            accepted: false,
+            reason: "ASSIGNMENT_RUN_OWNERSHIP_CONFLICT",
+            workflow_run_id: currentOwner
+          };
+        }
+
+        const capacity = capacityObservation({
+          core: this.core,
+          candidateId:
+            assignment.execution_route.runner_candidate_id,
+          status,
+          observedAt,
+          retryAt
+        });
+        const failure = executionFailure({
+          core: this.core,
+          assignment,
+          executionInstanceId: verified.execution_instance_id,
+          status,
+          observedAt,
+          retryAt
+        });
+
+        const comment = await this.gh.createIssueComment(
+          workItem.control_repository,
+          workItem.issue_number,
+          renderRoutingEvidenceComment(
+            EXECUTION_FAILURE_MARKER,
+            "Trusted execution failure for current routed assignment.",
+            {
+              failure,
+              capacity_observation: capacity
+            }
+          )
+        );
+
         return {
-          accepted: false,
-          reason: "ASSIGNMENT_RUN_OWNERSHIP_CONFLICT",
-          workflow_run_id: currentOwner
+          accepted: true,
+          evidence_comment_id: comment.id,
+          failure,
+          capacity_observation: capacity
         };
       }
+    );
 
-      const capacity = capacityObservation({
-        core: this.core,
-        candidateId:
-          assignment.execution_route.runner_candidate_id,
-        status,
-        observedAt,
-        retryAt
-      });
-      const failure = executionFailure({
-        core: this.core,
-        assignment,
-        executionInstanceId: verified.execution_instance_id,
-        status,
-        observedAt,
-        retryAt
-      });
+    if (!evidenceWrite.accepted) return evidenceWrite;
 
-      const comment = await this.gh.createIssueComment(
-        workItem.control_repository,
-        workItem.issue_number,
-        renderRoutingEvidenceComment(
-          EXECUTION_FAILURE_MARKER,
-          "Trusted execution failure for current routed assignment.",
-          {
-            failure,
-            capacity_observation: capacity
-          }
-        )
-      );
-
-      const result = await this.processWorkItem(workItem, observedAt);
-      return {
-        accepted: true,
-        evidence_comment_id: comment.id,
-        failure,
-        capacity_observation: capacity,
-        result
-      };
-    });
+    // Release the receiver-claim critical section before T14 processing.
+    // Replacement dispatch may acquire the same per-work-item claim mutex.
+    const result = await this.processWorkItem(workItem, observedAt);
+    return {
+      ...evidenceWrite,
+      result
+    };
   }
 
   async verifyAssignment(
