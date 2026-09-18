@@ -798,6 +798,15 @@ async function applyTransitionSideEffects({
     }
   }
 
+  if (
+    roleResult &&
+    next.material_operation &&
+    next.material_operation.status !== "PREPARED" &&
+    next.material_operation.status !== "HUMAN_ACTION_REQUIRED"
+  ) {
+    next.material_operation = null;
+  }
+
   if (roleResult && state.claim_control?.active_claim) {
     const receipt = next.run_receipts?.[roleResult.normalized.trusted.assignment_id];
     if (receipt) {
