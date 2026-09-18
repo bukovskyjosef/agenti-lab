@@ -173,7 +173,7 @@ export async function recordExecutionFailure({
       state.assignment.execution_route.runner_candidate_id,
     semantic_work_digest: state.assignment.semantic_work_digest,
     capacity_status: status,
-    transient: status !== "UNAVAILABLE",
+    transient: true,
     objective_retry_reason: "ROUTING_EXECUTION_FAILURE",
     retry_at: retryAt,
     observed_at: observedAt,
