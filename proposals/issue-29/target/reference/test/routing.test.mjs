@@ -154,12 +154,15 @@ test("provider-neutral capacity and billing-safety evidence are digest/freshness
   );
 });
 
-test("strict INCLUDED_ALLOWANCE is fail-closed when stock subscription billing safety is UNKNOWN", () => {
+test("strict INCLUDED_ALLOWANCE allows UNKNOWN capacity only with verified no-spillover safety", () => {
   const action = routeD({
     capacities: [capacity("included-primary", "UNKNOWN")]
   });
   assert.equal(action.transition_id, "T02");
-  assert.equal(action.assignment.execution_route.runner_candidate_id, "included-secondary");
+  assert.equal(
+    action.assignment.execution_route.runner_candidate_id,
+    "included-primary"
+  );
 
   const strictOnly = structuredClone(profile);
   strictOnly.execution_routing.policies[0].candidates = ["included-primary"];
