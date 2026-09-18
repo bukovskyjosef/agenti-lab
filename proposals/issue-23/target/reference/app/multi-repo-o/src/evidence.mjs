@@ -65,27 +65,85 @@ function currentRoleEvidence({ binding, comment, state, candidate, core }) {
   return { binding, current, expected_context_binding: expectedContext };
 }
 
-export function acceptedEvidenceSnapshot({ state, comments, candidate, core, currentHumanEvidence }) {
+export function acceptedEvidenceSnapshot({
+  state,
+  comments,
+  candidate,
+  core,
+  currentHumanEvidence
+}) {
   if (!state) return [];
-  const bindings = [];
-  if (state.review?.evidence_ref) bindings.push(state.review.evidence_ref);
-  if (state.release_authorization?.response_ref) bindings.push(state.release_authorization.response_ref);
+
+  const entries = [];
+  if (state.review?.evidence_ref) {
+    entries.push({
+      binding: state.review.evidence_ref,
+      earliest_affected_point: "IN_REVIEW"
+    });
+  }
+  if (state.release_authorization?.response_ref) {
+    entries.push({
+      binding: state.release_authorization.response_ref,
+      earliest_affected_point: "APPROVED"
+    });
+  }
   for (const ref of state.publication?.evidence_refs ?? []) {
-    if (ref && "object_id" in ref) bindings.push(ref);
+    if (ref && "object_id" in ref) {
+      entries.push({
+        binding: ref,
+        earliest_affected_point: "APPROVED"
+      });
+    }
   }
   const stopRef = state.stop?.record_ref;
-  if (stopRef && "object_id" in stopRef) bindings.push(stopRef);
+  if (stopRef && "object_id" in stopRef) {
+    entries.push({
+      binding: stopRef,
+      earliest_affected_point: "ANALYSIS"
+    });
+  }
 
-  return bindings.map((binding) => {
+  return entries.map(({ binding, earliest_affected_point }) => {
     if (!("object_id" in binding)) return null;
-    const comment = comments.find((item) => String(item.id) === String(binding.object_id));
-    if (!comment) return { binding, current: null, expected_context_binding: binding.context_binding };
-    if (["role_result_comment", "publication_comment"].includes(binding.evidence_kind)) {
-      return currentRoleEvidence({ binding, comment, state, candidate, core });
+    const comment = comments.find(
+      (item) => String(item.id) === String(binding.object_id)
+    );
+    if (!comment) {
+      return {
+        binding,
+        current: null,
+        expected_context_binding: binding.context_binding,
+        earliest_affected_point
+      };
     }
+
+    if (["role_result_comment", "publication_comment"].includes(
+      binding.evidence_kind
+    )) {
+      return {
+        ...currentRoleEvidence({
+          binding,
+          comment,
+          state,
+          candidate,
+          core
+        }),
+        earliest_affected_point
+      };
+    }
+
     if (binding.evidence_kind === "issue_comment") {
-      return currentHumanEvidence({ binding, comment, state, core });
+      return {
+        ...currentHumanEvidence({
+          binding,
+          comment,
+          state,
+          core
+        }),
+        earliest_affected_point
+      };
     }
+
     return null;
   }).filter(Boolean);
 }
