@@ -91,7 +91,9 @@ test("I remains a system function, not an assignment/result role", async () => {
 
 test("assembled canonical reference no longer names Asistentka as a system function", async () => {
   const offenders = [];
+  const self = resolve(fileURLToPath(import.meta.url));
   for (const path of await files(referenceRoot)) {
+    if (resolve(path) === self) continue;
     if (!/\.(md|mjs|json|yml|yaml)$/.test(path)) continue;
     const body = await text(path);
     const deprecatedName = "Asis" + "tentka";
