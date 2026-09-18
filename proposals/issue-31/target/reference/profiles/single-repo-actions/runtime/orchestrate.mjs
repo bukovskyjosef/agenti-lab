@@ -6,6 +6,7 @@ import {
   evaluate,
   generateAssignment,
   projectAction,
+  recoverClaim,
   terminalizeClaim,
   verifyRoleResultClaim,
   validateSchema
@@ -26,6 +27,10 @@ import {
 import { assignmentFromState, loadRuntime } from "./runner.mjs";
 import { definitionOfReady } from "./contract.mjs";
 import { routingEvidenceSnapshot } from "./routing-evidence.mjs";
+import {
+  recoverManualHumanState,
+  recoverPlatformRunState
+} from "./recovery.mjs";
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, "utf8"));
@@ -147,6 +152,17 @@ function commandFromComment(comment) {
 
   match = body.match(/^\/agenti\s+reopen(?:\s+([\s\S]*))?$/i);
   if (match) return { kind: "reopen", reason: (match[1] ?? "").trim() };
+
+  match = body.match(
+    /^\/agenti\s+claim\s+recover\s+(clm-[A-Za-z0-9._-]+)(?:\s*\n([\s\S]+))?$/i
+  );
+  if (match) {
+    return {
+      kind: "claim-recover",
+      claim_id: match[1],
+      reason: (match[2] ?? "").trim()
+    };
+  }
 
   if (/^\/agenti\s+reconcile\s*$/i.test(body)) return { kind: "reconcile" };
   return null;
@@ -894,6 +910,126 @@ async function projectLabels(github, issueNumber, state, runtimeConfig) {
   }
 }
 
+async function recoverActiveClaimIfAuthorized({
+  github,
+  runtime,
+  loaded,
+  issueNumber
+}) {
+  const state = loaded.state;
+  const claim = state?.claim_control?.active_claim;
+  if (!state?.assignment || !claim) return null;
+
+  const roleComment = findRoleResult(
+    loaded.comments,
+    state.assignment.assignment_id
+  );
+  if (roleComment) return null;
+
+  if (claim.lease?.mode === "NONE") {
+    const commands = humanComments(loaded.comments, runtime.projectProfile);
+    const recovery = [...commands].reverse().find(
+      (entry) =>
+        entry.command.kind === "claim-recover" &&
+        entry.command.claim_id === claim.claim_id
+    );
+    if (!recovery) return null;
+
+    const recovered = recoverManualHumanState({
+      state,
+      command: recovery.command,
+      humanActorId: recovery.comment.user?.id,
+      configuredHumanActorIds: new Set(
+        runtime.projectProfile.human.principals.map(
+          (principal) => principal.actor_id
+        )
+      ),
+      evidenceRef: "issue-comment:" + String(recovery.comment.id),
+      core: {
+        recoverClaim: (args) => recoverClaim(args),
+        digest
+      }
+    });
+    if (!recovered.recovered) return null;
+
+    await saveStateCAS(
+      github,
+      issueNumber,
+      recovered.state,
+      runtime.workflowStateSchema,
+      loaded.comment,
+      state.state_version,
+      state.claim_control?.claim_version ?? 0
+    );
+    const comments = await github.listIssueComments(issueNumber);
+    await ensureAssignmentDispatch(
+      github,
+      runtime,
+      recovered.state,
+      comments,
+      issueNumber
+    );
+    return {
+      status: "CLAIM_RECOVERED_AND_REDISPATCHED",
+      mode: "MANUAL_H",
+      claim_id: claim.claim_id,
+      evidence_ref: recovered.evidence_ref
+    };
+  }
+
+  if (claim.lease?.mode === "PLATFORM_RUN") {
+    const runId = claim.owner?.platform_run_id;
+    if (!runId) return null;
+
+    let run;
+    try {
+      run = await github.getWorkflowRun(runId);
+    } catch (error) {
+      if (String(error.message).includes("failed 404")) return null;
+      throw error;
+    }
+
+    const recovered = recoverPlatformRunState({
+      state,
+      roleResultPresent: false,
+      run,
+      core: {
+        recoverClaim: (args) => recoverClaim(args),
+        digest
+      }
+    });
+    if (!recovered.recovered) return null;
+
+    await saveStateCAS(
+      github,
+      issueNumber,
+      recovered.state,
+      runtime.workflowStateSchema,
+      loaded.comment,
+      state.state_version,
+      state.claim_control?.claim_version ?? 0
+    );
+    const comments = await github.listIssueComments(issueNumber);
+    await ensureAssignmentDispatch(
+      github,
+      runtime,
+      recovered.state,
+      comments,
+      issueNumber
+    );
+    return {
+      status: "CLAIM_RECOVERED_AND_REDISPATCHED",
+      mode: "PLATFORM_RUN",
+      claim_id: claim.claim_id,
+      platform_run_id: String(run.id),
+      platform_conclusion: run.conclusion,
+      evidence_ref: recovered.evidence_ref
+    };
+  }
+
+  return null;
+}
+
 export async function processIssue(issueNumber) {
   const github = githubClientFromEnv();
   const runtime = await loadRuntime();
@@ -902,6 +1038,14 @@ export async function processIssue(issueNumber) {
   for (let iteration = 0; iteration < 6; iteration += 1) {
     const issue = await github.getIssue(issueNumber);
     const loaded = await loadState(github, issueNumber, runtime.workflowStateSchema);
+
+    const recovery = await recoverActiveClaimIfAuthorized({
+      github,
+      runtime,
+      loaded,
+      issueNumber
+    });
+    if (recovery) return recovery;
 
     if (loaded.state?.assignment) {
       const roleComment = findRoleResult(loaded.comments, loaded.state.assignment.assignment_id);
