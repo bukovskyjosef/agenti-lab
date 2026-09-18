@@ -104,6 +104,8 @@ try {
   run("npm", ["run", "doctor", "--", "./conformance/fixtures/project-profile.routing.valid.json"], referenceRoot);
   run(process.execPath, ["--test", "conformance/routing/static.test.mjs"], referenceRoot);
   run(process.execPath, ["--test", "conformance/claims/static.test.mjs"], referenceRoot);
+  run(process.execPath, ["--test", "conformance/claims/recovery.test.mjs"], referenceRoot);
+  run(process.execPath, ["--test", "conformance/claims/cas-ambiguity.test.mjs"], referenceRoot);
   run(process.execPath, ["--test", "conformance/single-repo-actions/static.test.mjs"], referenceRoot);
   run(process.execPath, ["--test", "conformance/single-repo-actions/local-e2e.test.mjs"], referenceRoot);
   run("npm", ["test"], join(referenceRoot, "app", "multi-repo-o"));
