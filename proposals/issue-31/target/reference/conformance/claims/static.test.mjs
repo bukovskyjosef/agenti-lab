@@ -123,3 +123,69 @@ test("all single-repo authoritative writers revalidate the claim target", async 
   assert.match(pBody, /P_WRITE_TARGET_BINDING_DRIFT/);
   assert.match(pBody, /claim_target_digest/);
 });
+
+
+test("F1 App authoritative mutators share one non-expiring work-item fence", async () => {
+  const orchestrator = await readFile(
+    resolve(root, "app/multi-repo-o/src/orchestrator.mjs"),
+    "utf8"
+  );
+  const fence = await readFile(
+    resolve(root, "app/multi-repo-o/src/mutation-fence.mjs"),
+    "utf8"
+  );
+  const profile = JSON.parse(await readFile(
+    resolve(
+      root,
+      "app/multi-repo-o/config/project-profile.example.json"
+    ),
+    "utf8"
+  ));
+
+  assert.match(orchestrator, /new WorkItemMutationFence\(\)/);
+  assert.match(
+    orchestrator,
+    /processWorkItem\(workItem,[\s\S]*withStateMutationFence/
+  );
+  assert.ok(
+    orchestrator.split("withStateMutationFence(").length - 1 >= 5,
+    "O, receiver, material and failure paths must share the same fence"
+  );
+  assert.doesNotMatch(orchestrator, /receiverClaimLocks/);
+  assert.doesNotMatch(fence, /setTimeout|expires|lease/);
+  assert.equal(
+    profile.work_item_claims.mutation_domain,
+    "single-instance-nonexpiring-process-fence"
+  );
+});
+
+test("F2 App claim binds and revalidates exact target before provider authority", async () => {
+  const body = await readFile(
+    resolve(root, "app/multi-repo-o/src/orchestrator.mjs"),
+    "utf8"
+  );
+  assert.match(body, /deriveClaimTarget/);
+  assert.match(body, /target_digest:\s*targetDigest/);
+  assert.match(body, /ASSIGNMENT_TARGET_BINDING_STALE/);
+  assert.match(body, /ASSIGNMENT_TARGET_CHANGED_DURING_CLAIM/);
+  assert.match(body, /D_TARGET_BASE_SHA_MISSING/);
+  assert.match(body, /getBranch/);
+});
+
+test("F3 Actions D/P sinks use durable PREPARED operation and crash reconciliation", async () => {
+  const dBody = await runtime("candidate-writer.mjs");
+  const pBody = await runtime("publish.mjs");
+  const oBody = await runtime("orchestrate.mjs");
+  const materialBody = await runtime("material-operation.mjs");
+
+  assert.match(dBody, /prepareDurableMaterialOperation/);
+  assert.match(dBody, /resolveDurableMaterialOperation/);
+  assert.match(dBody, /expected_head_sha/);
+  assert.match(pBody, /prepareDurableMaterialOperation/);
+  assert.match(pBody, /resolveDurableMaterialOperation/);
+  assert.match(oBody, /reconcileMaterialOperationForFailedRun/);
+  assert.match(materialBody, /HUMAN_ACTION_REQUIRED/);
+  assert.match(materialBody, /NOT_APPLIED/);
+  assert.match(materialBody, /push-applied-result-missing/);
+  assert.match(materialBody, /merge-applied/);
+});
