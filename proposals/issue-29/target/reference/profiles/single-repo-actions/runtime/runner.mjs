@@ -136,6 +136,14 @@ export async function prepareRun({ role, issueNumber, assignmentId, outDir = ".a
   if (state.assignment.role !== role) throw new Error("OUT_OF_ROLE_ASSIGNMENT");
   if (state.assignment.bound_state_version !== state.state_version) throw new Error("STALE_ASSIGNMENT_VERSION");
 
+  const expectedCandidate = process.env.AGENTI_EXPECTED_RUNNER_CANDIDATE ?? "";
+  if (
+    expectedCandidate &&
+    state.assignment.execution_route?.runner_candidate_id !== expectedCandidate
+  ) {
+    throw new Error("ROUTING_CANDIDATE_WORKFLOW_MISMATCH");
+  }
+
   const existingClaim = findRunClaim(loaded.comments, assignmentId);
   if (existingClaim) {
     await writeOutput("skip", "true");
@@ -215,7 +223,13 @@ export async function finalizeRun({ role, issueNumber, assignmentId, proposalPat
 
   const assignment = assignmentFromState(state, runtime.projectProfile);
   const rawProposal = await readJson(proposalPath);
-  const proposalSchema = await readJson(".agenti-runtime/adapters/codex-action/schemas/" + ROLE_SCHEMA[role]);
+  const adapterId = assignment.execution_route?.adapter_id ?? "codex-action";
+  const schemaAdapter = adapterId === "claude-code-action"
+    ? "claude-code-action"
+    : "codex-action";
+  const proposalSchema = await readJson(
+    ".agenti-runtime/adapters/" + schemaAdapter + "/schemas/" + ROLE_SCHEMA[role]
+  );
   const proposalErrors = validateSchema(rawProposal, proposalSchema);
   if (proposalErrors.length) throw new Error("Provider proposal invalid: " + proposalErrors.join("; "));
   const proposal = sanitizeProposal(role, rawProposal);
