@@ -1,0 +1,27 @@
+name: temporary / issue22 validation
+
+on:
+  pull_request:
+    branches:
+      - issue-21/core-protocol-o-engine
+    paths:
+      - "proposals/issue-21/**"
+      - "proposals/issue-22/**"
+      - ".github/workflows/issue22-validation.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Runtime
+        run: node --version
+      - name: Assemble approved Child 1 plus Child 2 and validate
+        run: node proposals/issue-22/assemble-and-validate.mjs
