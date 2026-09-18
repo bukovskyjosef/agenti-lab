@@ -46,18 +46,16 @@ The existing freshness fingerprint remains state/version/route bound for stale-r
 
 The default cost-min profile prefers subscription/included allowance.
 
-For:
-
-`INCLUDED_ALLOWANCE + paid_execution: FORBIDDEN`
-
-an unattended route is eligible only when either:
+For any `INCLUDED_ALLOWANCE` route, unattended execution is eligible only when either:
 
 1. paid spillover is technically impossible, or
 2. trusted current billing-safety evidence is `VERIFIED_NO_PAID_SPILLOVER`.
 
+`INCLUDED_ALLOWANCE` cannot declare incremental paid usage. A policy change to `ALLOWED_WITH_BUDGET` does not convert the included route into paid authority or bypass its no-spillover gate. Paid overflow must be a separate PREPAID/METERED candidate.
+
 OAuth token presence and API-key absence are never treated as spend-safety proof.
 
-Metered/prepaid candidates require explicit `ALLOWED_WITH_BUDGET` authority plus an enforceable hard limit.
+Any `ALLOWED_WITH_BUDGET` policy requires an explicit budget/enforcement declaration. Metered/prepaid candidates additionally require a candidate hard-limit mechanism.
 
 ## Capacity and T14
 
@@ -65,7 +63,7 @@ Capacity evidence is provider-neutral:
 
 `AVAILABLE | TEMPORARILY_EXHAUSTED | RATE_LIMITED | UNAVAILABLE | UNKNOWN`.
 
-A current routed execution failure may trigger existing T14 only when deterministic wrapper evidence binds the failed current assignment/execution/semantic work.
+A current routed execution failure may trigger existing T14 only when deterministic wrapper evidence binds the failed current assignment/execution/semantic work. Accepted routing-recoverable `UNAVAILABLE` evidence is included in this path rather than being stranded outside T14.
 
 T14 then:
 
@@ -75,6 +73,8 @@ T14 then:
 - projects durable bounded wait and relies on reconcile at/after `not_before`.
 
 Late results from the failed assignment remain stale and are rejected. No new lifecycle state is introduced; `BLOCKED` is reused only when no independent authorized work can proceed.
+
+A routing wait is bounded. At the configured `max_wait_deadline`, the supported `on_max_wait: HUMAN` behavior uses existing T15 + generic Human-resolution semantics and clears the wait so polling cannot continue indefinitely.
 
 ## Profiles
 
