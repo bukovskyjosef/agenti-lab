@@ -63,7 +63,7 @@ jobs:
             exit 1
           fi
       - id: schema
-        run: echo "json=$(jq -c . .agenti-runtime/adapters/claude-code-action/schemas/developer-proposal.schema.json)" }} "$GITHUB_OUTPUT"
+        run: echo "json=$(jq -c . .agenti-runtime/adapters/claude-code-action/schemas/developer-proposal.schema.json)" >> "$GITHUB_OUTPUT"
       - if: vars.AGENTI_TEST_MODE == 'true'
         env:
           AGENTI_TEST_MODE: "true"
@@ -97,7 +97,7 @@ jobs:
           if [ -n "$EXECUTION_FILE" ] && [ -f "$EXECUTION_FILE" ] && grep -Eiq 'rate.?limit|usage.?limit|quota|capacity|exhausted|reset' "$EXECUTION_FILE"; then
             STATUS="RATE_LIMITED"
           fi
-          echo "capacity_status=$STATUS" }} "$GITHUB_OUTPUT"
+          echo "capacity_status=$STATUS" >> "$GITHUB_OUTPUT"
       - if: vars.AGENTI_TEST_MODE == 'true' || steps.claude.outcome == 'success'
         name: Capture deterministic workspace diff
         run: |
