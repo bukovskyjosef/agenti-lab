@@ -89,6 +89,9 @@ export function reconstructRoutingEvidence({
       state?.assignment &&
       envelope.failure.failed_assignment_id ===
         state.assignment.assignment_id &&
+      envelope.failure.claim_id === state.claim_control?.active_claim?.claim_id &&
+      envelope.failure.claim_generation ===
+        state.claim_control?.active_claim?.claim_generation &&
       envelope.failure.semantic_work_digest ===
         state.assignment.semantic_work_digest
     ) {
