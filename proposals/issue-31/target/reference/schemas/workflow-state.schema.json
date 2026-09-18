@@ -572,6 +572,14 @@
               "FAILED_BEFORE_RESULT",
               "STALE"
             ]
+          },
+          "claim_id": {
+            "type": "string",
+            "pattern": "^clm-"
+          },
+          "claim_generation": {
+            "type": "integer",
+            "minimum": 1
           }
         }
       }
