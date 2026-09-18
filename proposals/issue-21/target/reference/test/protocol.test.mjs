@@ -232,6 +232,73 @@ test("R APPROVED cannot carry blocking finding or correction owner", () => {
   );
 });
 
+
+test("D change artifact is injected by deterministic wrapper, not trusted from model", () => {
+  const state = structuredClone(baseState);
+  state.lifecycle = "IN_PROGRESS";
+  const assignment = generateAssignment({
+    state,
+    role: "D",
+    purpose: "IMPLEMENT_CURRENT_CONTRACT",
+    issued_at: "2026-09-18T10:20:00Z",
+    context_entrypoints: [{ kind: "work_item", ref: "example/product#42" }]
+  });
+
+  const proposal = {
+    role: "D",
+    status: "COMPLETED",
+    result_type: "DEVELOPER",
+    evidence_refs: [],
+    human_request: null,
+    retry_or_failure: null,
+    payload: {
+      work_contract_digest: state.contract.digest,
+      base: { repository: "example/product", ref_or_sha: "main" },
+      change_artifact: {
+        format: "unified-diff",
+        artifact_ref: "model:untrusted",
+        sha256: digest({ artifact: "model" })
+      },
+      requested_branch_key: "issue-42",
+      author_validation: { refs: [], summary: "author checks" },
+      blockers: []
+    }
+  };
+
+  const trustedArtifact = {
+    format: "unified-diff",
+    artifact_ref: "wrapper:artifact-1",
+    sha256: digest({ artifact: "trusted-wrapper-bytes" })
+  };
+
+  const normalized = normalizeRoleResult({
+    proposal,
+    trustedFacts: {
+      ...trustedFacts(assignment, "exec-developer-1"),
+      change_artifact: trustedArtifact,
+      author_validation_refs: []
+    },
+    assignment,
+    roleResultSchema
+  });
+
+  assert.deepEqual(normalized.payload.change_artifact, trustedArtifact);
+  assert.notEqual(
+    normalized.payload.change_artifact.artifact_ref,
+    proposal.payload.change_artifact.artifact_ref
+  );
+
+  assert.throws(
+    () => normalizeRoleResult({
+      proposal,
+      trustedFacts: trustedFacts(assignment, "exec-developer-2"),
+      assignment,
+      roleResultSchema
+    }),
+    /wrapper-owned trusted change_artifact/
+  );
+});
+
 test("P result cannot emit Done", () => {
   const state = structuredClone(baseState);
   state.lifecycle = "APPROVED";
