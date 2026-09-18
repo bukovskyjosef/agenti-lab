@@ -17,6 +17,7 @@ jobs:
       cancel-in-progress: false
       queue: max
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: write
       pull-requests: write
