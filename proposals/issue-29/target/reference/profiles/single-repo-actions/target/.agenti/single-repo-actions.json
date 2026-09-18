@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "profile_id": "single-repo-actions",
+  "intake_label": "agenti:managed",
+  "human_queue_labels": {
+    "input": "agenti:waiting-human",
+    "release": "agenti:release-approval"
+  },
+  "default_branch": "__DEFAULT_BRANCH__",
+  "runner": {
+    "adapter": "routed",
+    "codex_action_ref": "86365089eb2b84e0a8fb0717b304f8bdcb13b20e",
+    "secret_name": "OPENAI_API_KEY",
+    "model": "",
+    "effort": "",
+    "claude_action_ref": "a4f54ef2c58884867281bd8e2f8d63352ad019a9",
+    "required_secret_names": [
+      "CLAUDE_CODE_OAUTH_TOKEN"
+    ],
+    "optional_secret_names": [
+      "OPENAI_API_KEY"
+    ],
+    "candidate_workflows": {
+      "claude-subscription": {
+        "A": "agenti-role-a-claude.yml",
+        "D": "agenti-role-d-claude.yml",
+        "R": "agenti-role-r-claude.yml"
+      },
+      "codex-api-optional": {
+        "A": "agenti-role-a.yml",
+        "D": "agenti-role-d.yml",
+        "R": "agenti-role-r.yml"
+      },
+      "deterministic-p": {
+        "P": "agenti-publish.yml"
+      }
+    }
+  },
+  "publication": {
+    "mode": "merge",
+    "merge_method": "squash"
+  },
+  "test_mode": false
+}
