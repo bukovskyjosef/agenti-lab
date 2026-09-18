@@ -30,3 +30,17 @@ Corrective self-test run `35347834074`: bounded delta PASS, syntax PASS, `npm te
 
 No Child #21 core/schema/transition file is changed.
 
+## Remaining F1 receiver-claim concurrency correction
+
+Independent re-review `5248168613` / Issue comment `5730521253` confirmed F2 resolved and returned only one remaining F1 defect against head `cbd36f68a65d055da3bfe136bab68c1d8ca794aa`.
+
+The correction is limited to receiver run-claim serialization:
+- dedicated per-work-item claim mutex spans fresh reconstruction, owner check, durable GitHub claim write and grant/conflict;
+- post-dispatch bind uses the same mutex namespace;
+- GitHub state remains the durable owner; the mutex is operational serialization only;
+- concurrent regression races two receiver preflights from the same unclaimed GitHub state after operational DB recreation and proves exactly one valid owner.
+
+Self-test run `35349536783`: bounded remaining-F1 delta PASS, syntax PASS, `npm test` **14/14 PASS**, Docker build PASS.
+
+F2 implementation is unchanged.
+
