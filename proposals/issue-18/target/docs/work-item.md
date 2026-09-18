@@ -137,7 +137,7 @@ Preferuj native GitHub parent/sub-issue relationship. Pokud v daném GitHub setu
 
 Změna terminal/completion-relevant state required child nebo explicitní parent-level condition je trigger pro orchestration re-evaluation Parent Intentu.
 
-Orchestrace:
+O:
 
 1. znovu načte authoritative Parent Intent, aktuální child set a relevantní durable completion evidence,
 2. ověří, že parent není `Stopped` a že re-evaluation stále odpovídá current parent/child bindings,
@@ -249,7 +249,7 @@ Stop record musí být z authoritative state rekonstruovatelný a obsahuje alesp
 
 Human autorizuje intentional abandonment product intentu/scope/candidate. Specializované role smějí vytvořit evidence a recommendation, ale samy nesmějí nejistotu nebo neúspěch převést na abandonment.
 
-`SUPERSEDED_OR_OBSOLETE` smí orchestrace zapsat deterministicky bez nové Human odpovědi pouze pokud authoritative replacement/current work item už durable existuje, lossless mapping všech stále autorizovaných obligations je rekonstruovatelný **a** project policy explicitně dovoluje automatic supersession pro tento případ. Jinak je potřeba Human authority nebo dokončení mappingu; automation nesmí source předčasně terminalizovat.
+`SUPERSEDED_OR_OBSOLETE` smí O zapsat deterministicky bez nové Human odpovědi pouze pokud authoritative replacement/current work item už durable existuje, lossless mapping všech stále autorizovaných obligations je rekonstruovatelný **a** project policy explicitně dovoluje automatic supersession pro tento případ. Jinak je potřeba Human authority nebo dokončení mappingu; automation nesmí source předčasně terminalizovat.
 
 `Stopped` work nesmí pokračovat z delayed eventu, retrye ani starého queued runu. Reopen/resume vyžaduje explicitní authorized reopen/current-state transition; původní event nebo odstranění příčiny samo work item znovu neaktivuje.
 
