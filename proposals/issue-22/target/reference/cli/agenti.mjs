@@ -328,7 +328,6 @@ async function setupGithub(targetRoot) {
   }
 
   const requiredSecret = runtime.runner.secret_name;
-  gh(["variable", "set", "AGENTI_CODEX_SECRET_NAME", "--body", requiredSecret]);
   gh(["variable", "set", "AGENTI_TEST_MODE", "--body", "false"]);
 
   const secrets = gh(["secret", "list", "--json", "name"]);
@@ -353,7 +352,7 @@ async function setupGithub(targetRoot) {
   console.log("- default branch: " + runtime.default_branch);
   console.log("- H principal: " + profile.human.principals[0].login + " (" + profile.human.principals[0].actor_id + ")");
   console.log("- provider secret metadata present: " + requiredSecret);
-  console.log("- repository variables AGENTI_CODEX_SECRET_NAME and AGENTI_TEST_MODE=false configured");
+  console.log("- repository variable AGENTI_TEST_MODE=false configured");
   console.log("- labels/workflows verified");
 }
 
