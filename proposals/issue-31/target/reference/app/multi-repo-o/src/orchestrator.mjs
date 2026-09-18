@@ -702,6 +702,23 @@ export class MultiRepoOrchestrator {
 
   async processWorkItem(workItem, observedAt = new Date().toISOString()) {
     const reconstructed = await this.reconstruct(workItem, observedAt);
+    if (
+      reconstructed.state.material_operation?.status === "PREPARED" ||
+      reconstructed.state.material_operation?.status === "HUMAN_ACTION_REQUIRED"
+    ) {
+      return {
+        action: {
+          kind: "BLOCKED",
+          reason: reconstructed.state.material_operation.status === "PREPARED"
+            ? "MATERIAL_OPERATION_IN_FLIGHT"
+            : "MATERIAL_OPERATION_REQUIRES_HUMAN"
+        },
+        state: reconstructed.state,
+        dispatched: null,
+        safe_hold: true,
+        material_operation: reconstructed.state.material_operation
+      };
+    }
     if (reconstructed.snapshot.role_result) {
       const claimResult = this.core.verifyRoleResultClaim({
         state: reconstructed.state,
@@ -830,6 +847,267 @@ export class MultiRepoOrchestrator {
       state: ensured.state,
       dispatched: ensured.dispatched
     };
+  }
+
+  async prepareMaterialWrite({
+    assignment,
+    runnerRepository,
+    workflowRunId,
+    workflowRunAttempt,
+    claimId,
+    claimGeneration,
+    operationKind,
+    targetBinding,
+    preparedAt = new Date().toISOString()
+  }) {
+    if (
+      !operationKind ||
+      !operationKind.startsWith(String(assignment?.role ?? "") + "_")
+    ) {
+      return { valid: false, reason: "MATERIAL_OPERATION_ROLE_MISMATCH" };
+    }
+    if (!targetBinding || typeof targetBinding !== "object") {
+      return { valid: false, reason: "MATERIAL_TARGET_BINDING_REQUIRED" };
+    }
+
+    const workItem = {
+      control_repository: assignment.work_item?.control_repository,
+      issue_number: assignment.work_item?.issue_number,
+      kind: "executable"
+    };
+    if (
+      workItem.control_repository !== this.profile.control_repository ||
+      !Number.isInteger(workItem.issue_number)
+    ) {
+      return { valid: false, reason: "WORK_ITEM_NOT_IN_CONTROL_REPOSITORY" };
+    }
+
+    return this.withReceiverClaimMutex(workItem, async () => {
+      const leaseKey = receiverClaimLeaseKey(workItem);
+      const leaseOwner = receiverClaimLeaseOwner({
+        assignmentId: assignment.assignment_id,
+        runnerRepository,
+        workflowRunId,
+        workflowRunAttempt,
+        source: "material-prepare"
+      });
+      if (!this.store.acquireWorkLease({
+        workKey: leaseKey,
+        owner: leaseOwner,
+        leaseMs: RECEIVER_CLAIM_LEASE_MS
+      })) {
+        return { valid: false, reason: "WORK_ITEM_MUTATION_BUSY" };
+      }
+
+      try {
+        const reconstructed = await this.reconstruct(workItem, preparedAt);
+        if (!assignmentMatchesState(
+          assignment,
+          reconstructed.state,
+          this.profile,
+          this.core
+        )) {
+          return { valid: false, reason: "ASSIGNMENT_NOT_CURRENT" };
+        }
+
+        const verifiedRun = await this.verifyRunnerWorkflowRun({
+          assignment,
+          runnerRepository,
+          workflowRunId,
+          workflowRunAttempt
+        });
+        if (!verifiedRun.valid) return verifiedRun;
+
+        const claimCheck = this.core.verifyActiveClaim({
+          state: reconstructed.state,
+          assignmentId: assignment.assignment_id,
+          claimId,
+          claimGeneration,
+          executionInstanceId: verifiedRun.execution_instance_id
+        });
+        if (!claimCheck.valid) {
+          return { valid: false, reason: claimCheck.reason };
+        }
+
+        const prepared = this.core.prepareMaterialOperation({
+          state: reconstructed.state,
+          claimId,
+          claimGeneration,
+          assignmentId: assignment.assignment_id,
+          executionInstanceId: verifiedRun.execution_instance_id,
+          operationKind,
+          targetBinding,
+          preparedAt
+        });
+
+        if (!prepared.prepared) {
+          if (
+            prepared.reason === "MATERIAL_OPERATION_ALREADY_PREPARED" ||
+            prepared.reason === "MATERIAL_OPERATION_ALREADY_APPLIED"
+          ) {
+            return {
+              valid: true,
+              prepared: false,
+              reason: prepared.reason,
+              material_operation: prepared.material_operation ??
+                reconstructed.state.material_operation
+            };
+          }
+          return { valid: false, reason: prepared.reason };
+        }
+
+        prepared.state.updated_by = {
+          o_run_id:
+            "material-prepare:" + prepared.material_operation.material_operation_id,
+          transition_id: reconstructed.state.updated_by?.transition_id ?? null,
+          idempotence_key:
+            "material-prepare:" + prepared.material_operation.material_operation_id
+        };
+
+        const stateComment = await writeStateCas({
+          gh: this.gh,
+          workItem,
+          previous: reconstructed.state,
+          stateComment: reconstructed.stateComment,
+          nextState: prepared.state,
+          core: this.core,
+          trustedStateAppId: this.trustedStateAppId
+        });
+
+        return {
+          valid: true,
+          prepared: true,
+          reason: "PREPARED",
+          material_operation: prepared.material_operation,
+          claim_version: prepared.state.claim_control.claim_version,
+          state_comment_id: stateComment.id
+        };
+      } finally {
+        this.store.releaseWorkLease(leaseKey, leaseOwner);
+      }
+    });
+  }
+
+  async resolveMaterialWrite({
+    assignment,
+    runnerRepository,
+    workflowRunId,
+    workflowRunAttempt,
+    claimId,
+    claimGeneration,
+    materialOperationId,
+    outcome,
+    evidenceRef = null,
+    observedAt = new Date().toISOString()
+  }) {
+    const workItem = {
+      control_repository: assignment.work_item?.control_repository,
+      issue_number: assignment.work_item?.issue_number,
+      kind: "executable"
+    };
+    if (
+      workItem.control_repository !== this.profile.control_repository ||
+      !Number.isInteger(workItem.issue_number)
+    ) {
+      return { valid: false, reason: "WORK_ITEM_NOT_IN_CONTROL_REPOSITORY" };
+    }
+
+    return this.withReceiverClaimMutex(workItem, async () => {
+      const leaseKey = receiverClaimLeaseKey(workItem);
+      const leaseOwner = receiverClaimLeaseOwner({
+        assignmentId: assignment.assignment_id,
+        runnerRepository,
+        workflowRunId,
+        workflowRunAttempt,
+        source: "material-resolve"
+      });
+      if (!this.store.acquireWorkLease({
+        workKey: leaseKey,
+        owner: leaseOwner,
+        leaseMs: RECEIVER_CLAIM_LEASE_MS
+      })) {
+        return { valid: false, reason: "WORK_ITEM_MUTATION_BUSY" };
+      }
+
+      try {
+        const reconstructed = await this.reconstruct(workItem, observedAt);
+        if (!assignmentMatchesState(
+          assignment,
+          reconstructed.state,
+          this.profile,
+          this.core
+        )) {
+          return { valid: false, reason: "ASSIGNMENT_NOT_CURRENT" };
+        }
+
+        const verifiedRun = await this.verifyRunnerWorkflowRun({
+          assignment,
+          runnerRepository,
+          workflowRunId,
+          workflowRunAttempt
+        });
+        if (!verifiedRun.valid) return verifiedRun;
+
+        const claimCheck = this.core.verifyActiveClaim({
+          state: reconstructed.state,
+          assignmentId: assignment.assignment_id,
+          claimId,
+          claimGeneration,
+          executionInstanceId: verifiedRun.execution_instance_id
+        });
+        if (!claimCheck.valid) {
+          return { valid: false, reason: claimCheck.reason };
+        }
+
+        const resolved = this.core.resolveMaterialOperation({
+          state: reconstructed.state,
+          materialOperationId,
+          outcome,
+          evidenceRef
+        });
+        if (!resolved.resolved) {
+          return { valid: false, reason: resolved.reason };
+        }
+        if (resolved.idempotent) {
+          return {
+            valid: true,
+            resolved: true,
+            idempotent: true,
+            reason: resolved.reason,
+            material_operation: resolved.material_operation
+          };
+        }
+
+        resolved.state.updated_by = {
+          o_run_id: "material-resolve:" + materialOperationId,
+          transition_id: reconstructed.state.updated_by?.transition_id ?? null,
+          idempotence_key:
+            "material-resolve:" + materialOperationId + ":" + outcome
+        };
+
+        const stateComment = await writeStateCas({
+          gh: this.gh,
+          workItem,
+          previous: reconstructed.state,
+          stateComment: reconstructed.stateComment,
+          nextState: resolved.state,
+          core: this.core,
+          trustedStateAppId: this.trustedStateAppId
+        });
+
+        return {
+          valid: true,
+          resolved: true,
+          idempotent: false,
+          reason: resolved.reason,
+          material_operation: resolved.material_operation,
+          claim_version: resolved.state.claim_control.claim_version,
+          state_comment_id: stateComment.id
+        };
+      } finally {
+        this.store.releaseWorkLease(leaseKey, leaseOwner);
+      }
+    });
   }
 
   async recordExecutionFailure({
