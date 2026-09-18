@@ -12,8 +12,14 @@ export function parseRoleResultComment(body, core) {
   return parsed;
 }
 
-export function findStateComment(comments, core) {
-  return comments.find((comment) => comment.body?.includes(core.STATE_MARKER)) ?? null;
+export function findStateComment(comments, core, trustedAppId = null) {
+  const matches = comments.filter((comment) => {
+    if (!comment.body?.includes(core.STATE_MARKER)) return false;
+    if (trustedAppId === null || trustedAppId === undefined) return true;
+    return String(comment.performed_via_github_app?.id ?? "") === String(trustedAppId);
+  });
+  if (matches.length > 1) throw new Error("MULTIPLE_TRUSTED_STATE_COMMENTS");
+  return matches[0] ?? null;
 }
 
 export function commentCurrentObject({ comment, repository, evidenceKind, normalizedPayload, normalizedOutcome }) {
