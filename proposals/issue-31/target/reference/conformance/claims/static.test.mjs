@@ -54,3 +54,43 @@ test("App uses one work-item mutation key and GitHub projection claim authority"
   assert.match(body, /claim_control/);
   assert.match(body, /acquireClaimCAS/);
 });
+
+test("Actions reference wires authoritative platform-run recovery and bounded jobs", async () => {
+  const orchestrate = await runtime("orchestrate.mjs");
+  const github = await runtime("github.mjs");
+  assert.match(orchestrate, /recoverPlatformRunState/);
+  assert.match(orchestrate, /getWorkflowRun/);
+  assert.match(orchestrate, /claim-recover/);
+  assert.match(github, /getWorkflowRun\(runId\)/);
+
+  for (const file of [
+    "agenti-orchestrate.yml",
+    "agenti-publish.yml",
+    "agenti-reconcile.yml",
+    "agenti-role-a.yml",
+    "agenti-role-d.yml",
+    "agenti-role-r.yml",
+    "agenti-role-a-claude.yml",
+    "agenti-role-d-claude.yml",
+    "agenti-role-r-claude.yml"
+  ]) {
+    const body = await wf(file);
+    const jobs = body.match(/^    runs-on:/gm) ?? [];
+    const timeouts = body.match(/^    timeout-minutes:/gm) ?? [];
+    assert.equal(
+      timeouts.length,
+      jobs.length,
+      file + " must bound every job runtime for recoverable platform lifecycle"
+    );
+  }
+});
+
+test("App projection CAS resolves ambiguous writes by durable reread", async () => {
+  const body = await readFile(
+    resolve(root, "app/multi-repo-o/src/orchestrator.mjs"),
+    "utf8"
+  );
+  assert.match(body, /STATE_VERSION_CAS_AMBIGUOUS_CONFLICT/);
+  assert.match(body, /afterComments/);
+  assert.match(body, /finalComments/);
+});
