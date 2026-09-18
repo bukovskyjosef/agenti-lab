@@ -1,24 +1,30 @@
 # Status — Issue #23
 
-**READY FOR R RE-REVIEW**
+**READY FOR FRESH R RE-REVIEW**
 
-Waiting for: **independent R = Reviewer** on the exact corrective PR #28 head named in durable Issue #23 / PR #28 after temporary self-test workflow removal.
+Waiting for: **independent R = Reviewer** on the exact PR #28 head named in durable Issue #23 / PR #28 after temporary self-test workflow removal.
 
 Stable dependency:
 `Child #21 / PR #25 @ 7b155f8abd09f84c0065d64063eee3b2c3dce615`
 
-Prior rejected head:
-`543919320d9a86cfcee1a2c9584642461d161ad7`
+Prior re-reviewed head:
+`cbd36f68a65d055da3bfe136bab68c1d8ca794aa`
 
-Corrective scope is exactly F1/F2 from review `5247917293` / comment `5730196459`:
-- F1 GitHub-authoritative dispatch/run claim survives total operational DB loss and rejects a second applicable receiver run;
-- F2 shared-core INVALIDATE is CAS-projected to the supplied earliest affected point and converges.
+Remaining corrective scope is exactly F1 receiver-claim concurrency from review `5248168613` / comment `5730521253`.
 
-Corrective self-test evidence:
-- run `35347834074`;
-- bounded delta PASS;
+Correction:
+- dedicated per-work-item receiver-claim mutex serializes fresh reconstruction → owner check → durable GitHub claim write → grant/conflict;
+- post-dispatch claim and receiver preflight share the same claim-mutex namespace;
+- durable run ownership remains GitHub state, not operational SQLite;
+- concurrent regression after full DB recreation proves exactly one receiver can receive provider-work authority.
+
+F2 remains resolved and unchanged.
+
+Self-test evidence:
+- run `35349536783`;
+- bounded remaining-F1 delta PASS;
 - syntax PASS;
-- `npm test`: 13/13 PASS;
+- `npm test`: 14/14 PASS;
 - Docker build PASS.
 
 No Child #21 core/schema/transition file is modified. No publication/P work is authorized.
