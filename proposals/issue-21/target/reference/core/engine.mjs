@@ -379,7 +379,7 @@ export function evaluate(projectProfile, workflowState, authoritativeSnapshot, w
     });
   }
 
-  if (snapshot.release_response) {
+  if (snapshot.release_response?.status === "GRANTED") {
     const releaseValidation = validateReleaseGrant(
       projectProfile,
       workflowState,
