@@ -12,7 +12,9 @@ import {
   runEligibility
 } from "./protocol.mjs";
 import {
+  resolveRoutingPolicy,
   routingProjection,
+  routingWaitDeadlineReached,
   routingWaitDue,
   selectRunnerCandidate,
   semanticWorkDigest,
@@ -1035,6 +1037,80 @@ function waitSemanticEarliest(role) {
   return "ANALYSIS";
 }
 
+function maxWaitHumanAction({
+  projectProfile,
+  workflowState,
+  snapshot,
+  issuedAt,
+  transitionTable,
+  routing,
+  pending
+}) {
+  const policy = resolveRoutingPolicy(
+    projectProfile,
+    pending.role,
+    pending.purpose
+  );
+  if (policy.wait_policy?.on_max_wait !== "HUMAN") {
+    return {
+      kind: "BLOCKED",
+      reason: "UNSUPPORTED_MAX_WAIT_BEHAVIOR",
+      on_max_wait: policy.wait_policy?.on_max_wait ?? null
+    };
+  }
+
+  const boundaryDigest = digest({
+    policy_digest: routing.policy_digest,
+    semantic_work_digest: pending.semantic_work_digest,
+    role: pending.role,
+    purpose: pending.purpose,
+    max_wait_deadline: routing.wait.max_wait_deadline,
+    on_max_wait: "HUMAN"
+  });
+  const clearedRouting = {
+    ...structuredClone(routing),
+    pending: null,
+    selected_runner_candidate_id: null,
+    wait: {
+      status: "NONE",
+      reason: null,
+      candidate_id: null,
+      not_before: null,
+      max_wait_deadline: null
+    }
+  };
+
+  return baseAction(
+    transitionTable,
+    "T15",
+    workflowState,
+    snapshot,
+    {
+      lifecycle: snapshot.independent_work_available
+        ? workflowState.lifecycle
+        : "BLOCKED",
+      clear_assignment: true,
+      execution_routing: clearedRouting,
+      blocker: {
+        active: true,
+        kind: "ROUTING_MAX_WAIT",
+        digest: boundaryDigest,
+        ref: "routing-max-wait:" + boundaryDigest
+      },
+      human_request: {
+        type: "DECISION",
+        raised_by: "O",
+        resolution_route: "ANALYST_REEVALUATE",
+        question:
+          "Authorized runner capacity remained unavailable until the configured max-wait deadline. Review routing/capacity/budget policy, then resolve this request to re-enter analysis."
+      },
+      idempotence_inputs: {
+        routing_max_wait: boundaryDigest
+      }
+    }
+  );
+}
+
 function dueRoutingWaitAction({
   projectProfile,
   workflowState,
@@ -1060,6 +1136,18 @@ function dueRoutingWaitAction({
       earliest_affected_point: waitSemanticEarliest(pending.role),
       stale: ["assignment", "review", "release_authorization", "publication"]
     };
+  }
+
+  if (routingWaitDeadlineReached(routing, issuedAt)) {
+    return maxWaitHumanAction({
+      projectProfile,
+      workflowState,
+      snapshot,
+      issuedAt,
+      transitionTable,
+      routing,
+      pending
+    });
   }
 
   if (!routingWaitDue(routing, issuedAt)) {
