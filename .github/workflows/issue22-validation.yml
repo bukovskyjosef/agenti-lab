@@ -1,6 +1,9 @@
 name: temporary / issue22 validation
 
 on:
+  push:
+    branches:
+      - issue-22/single-repo-actions-starter
   pull_request:
     branches:
       - issue-21/core-protocol-o-engine
