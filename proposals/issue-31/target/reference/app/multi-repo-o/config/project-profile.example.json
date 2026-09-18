@@ -389,7 +389,7 @@
     ]
   },
   "work_item_claims": {
-    "mutation_domain": "sqlite-shared-work-item-mutex",
+    "mutation_domain": "single-instance-nonexpiring-process-fence",
     "recovery": {
       "mode": "PLATFORM_RUN"
     },
