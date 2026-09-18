@@ -94,3 +94,15 @@ test("App projection CAS resolves ambiguous writes by durable reread", async () 
   assert.match(body, /afterComments/);
   assert.match(body, /finalComments/);
 });
+
+test("single-repo runner fresh-reconstructs before claim and before provider", async () => {
+  const body = await runtime("runner.mjs");
+  assert.ok(
+    body.split("preClaimCurrentness({").length - 1 >= 2,
+    "runner must currentness-check both before and after claim grant"
+  );
+  assert.match(body, /terminalReason:\s*"REVOKED_DRIFT"/);
+  assert.match(body, /pre-provider-currentness:/);
+  assert.match(body, /CANDIDATE_HEAD_DRIFT_BEFORE_CLAIM/);
+  assert.match(body, /RELEASE_AUTHORIZATION_NOT_CURRENT/);
+});
