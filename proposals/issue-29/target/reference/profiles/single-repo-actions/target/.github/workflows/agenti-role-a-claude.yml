@@ -54,6 +54,13 @@ jobs:
         with:
           name: agenti-context-${{ inputs.assignment_id }}
           path: .agenti-run
+      - name: Fail closed on paid Anthropic API environment
+        shell: bash
+        run: |
+          if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "ANTHROPIC_API_KEY is forbidden for claude-subscription route"
+            exit 1
+          fi
       - id: schema
         run: echo "json=$(jq -c . .agenti-runtime/adapters/claude-code-action/schemas/analyst-proposal.schema.json)" }} "$GITHUB_OUTPUT"
       - if: vars.AGENTI_TEST_MODE == 'true'
