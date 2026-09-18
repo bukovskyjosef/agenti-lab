@@ -32,7 +32,10 @@ The service exposes:
 - `POST /webhook` — signature-verified GitHub webhook intake; durable enqueue precedes `202`;
 - `GET /healthz` — process liveness;
 - `GET /readyz` — configuration/store readiness;
-- `POST /assignment/verify` — receiver-side fresh assignment/current-state verification before a role/provider starts;\n- `POST /execution/failure` — authenticated deterministic capacity/rate-limit failure callback bound to the current routed assignment/owning workflow run.
+- `POST /assignment/verify` — receiver-side fresh assignment/current-state verification and authoritative claim acquisition before provider work;
+- `POST /material/prepare` — claim-bound durable PREPARED material-operation fence before an authoritative sink write;
+- `POST /material/resolve` — idempotent APPLIED / NOT_APPLIED / HUMAN_ACTION_REQUIRED resolution for that exact operation;
+- `POST /execution/failure` — authenticated deterministic capacity/rate-limit failure callback bound to the current routed assignment/owning workflow run.
 
 `compose.yml` is a single-node example with a persistent `/data` SQLite volume. In the lab it builds from the repository root so the container copies the exact R-approved Child #21 core; final integration in Child #24 may collapse that path to the published sibling `reference/core/` layout. The service can be restarted or its operational database can be lost without losing workflow authority; reconcile reconstructs from GitHub.
 
@@ -108,7 +111,9 @@ The verification endpoint fresh-reads the control issue/state plus implementatio
 
 For an explicit role assignment, O requests workflow-run details from `workflow_dispatch` and CAS-binds the returned run ID into `workflow-state.assignment.workflow_run_id`, with a matching execution identity in `run_receipts`. Reconcile first consults this GitHub projection, so total SQLite loss cannot cause another dispatch for an already claimed current assignment.
 
-Receiver claim acquisition is executable, not documentary: the single-node App uses a dedicated per-work-item operational mutex `receiver-claim:<work-item>` across fresh GitHub reconstruction → current-owner check → durable GitHub claim write → grant/conflict result. Post-dispatch durable binding uses the same mutex namespace. The mutex is only serialization; after it is acquired, GitHub state is still freshly reconstructed and remains the authoritative owner record. If two receiver runs race from the same unclaimed projection, exactly one enters the critical section and can receive provider-work authority; the other receives `ASSIGNMENT_RUN_CLAIM_CONFLICT`. After the winner releases the mutex, later retries still fail from the durable GitHub owner with `ASSIGNMENT_RUN_OWNERSHIP_CONFLICT`. Recreating an empty operational DB does not alter this rule. Assignment-keyed GitHub Actions concurrency may remain as defense in depth but is not required to close the receiver-claim race.
+Receiver claim acquisition is executable, not documentary. The single-node reference uses one SQLite work-item mutex keyed only by the authoritative control work item across O projection mutations, receiver claim acquisition, recovery/failure handling and material-operation prepare/resolve. GitHub `claim_control` remains the durable ownership authority; SQLite is synchronization only. If two receiver runs race from the same unclaimed projection, exactly one can durably acquire the claim and the other loses from the same mutation domain. Recreating an empty operational DB does not make an already claimed GitHub work item free.
+
+The bundled SQLite domain is conforming only for the documented single-instance reference topology (`AGENTI_INSTANCE_COUNT=1`). A declared multi-instance deployment with this local SQLite domain is rejected. A production multi-instance deployment must replace it with one genuinely shared linearizable backend.
 
 When the shared core returns `INVALIDATE`, the adapter no longer safe-holds unchanged state. It consumes only the core-provided reason and `earliest_affected_point`, projects the dependent state under the same state-comment CAS, and uses the exact existing T01/T04/T08 assignment metadata from the Child #21 transition table when an assignment is required. Contract drift therefore converges to ANALYSIS/A, review evidence drift to IN_REVIEW/R, and release evidence drift to the APPROVED release boundary rather than repeating INVALIDATE forever.
 
@@ -132,3 +137,23 @@ The multi-repo App uses the same Child #5 provider-neutral routing contract as t
 - T14 either emits a replacement assignment for the same role/purpose or durable bounded wait.
 
 The control Issue is also the reference **I = Interface** durable Human surface. I remains presentation/transport only; authority roles remain H/A/D/R/P.
+
+
+## Material-write fence
+
+A successful `/assignment/verify` is necessary but not sufficient for a durable A/D/R/P sink write.
+
+Before one authoritative sink operation, the runner must call `/material/prepare` with the exact assignment, claim ID/generation, operation kind and immutable target binding. O acquires the same control-work-item mutation domain, reconstructs GitHub authority, re-verifies the owning workflow execution and writes one bounded `material_operation: PREPARED` intent to the authoritative projection.
+
+Only after that response may the deterministic writer perform the sink. While PREPARED is unresolved, O safe-holds semantic Stop/drift/T-transition processing behind that already-linearized operation. The runner then calls `/material/resolve` as `APPLIED`, `NOT_APPLIED` or `HUMAN_ACTION_REQUIRED` with durable evidence. Duplicate resolve calls are idempotent by `material_operation_id`.
+
+This PREPARED intent is what closes the remote precheck→revoke→write gap without giving O publication credentials. Provider/model computation still runs outside the mutation domain. P/D credentials remain in the role-scoped writer.
+
+The bundled helper is:
+
+```bash
+node bin/material-operation.mjs prepare
+node bin/material-operation.mjs resolve
+```
+
+It reads JSON from stdin (or `AGENTI_MATERIAL_OPERATION_JSON`) and uses the same verified workflow-run headers as `bin/verify-assignment.mjs`.
