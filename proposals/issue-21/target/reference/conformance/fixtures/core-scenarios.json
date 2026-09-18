@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "scenarios": [
+    {
+      "id": "cold-reconstruction",
+      "expect": "projection round-trips and validates"
+    },
+    {
+      "id": "mutable-evidence-edit",
+      "expect": "DRIFTED and earliest affected source authority"
+    },
+    {
+      "id": "duplicate-no-progress",
+      "expect": "run eligibility false"
+    },
+    {
+      "id": "independence-collision",
+      "expect": "R evidence rejected before routing"
+    },
+    {
+      "id": "stopped-terminal",
+      "expect": "ordinary wake is NO_OP"
+    },
+    {
+      "id": "reopen",
+      "expect": "only explicit H reopen enables T17"
+    },
+    {
+      "id": "multi-repo-rebind",
+      "expect": "T19 invalidates dependent gates only"
+    }
+  ]
+}
