@@ -602,59 +602,53 @@ export class MultiRepoOrchestrator {
       };
     }
 
-    return this.withReceiverClaimMutex(
-      state.work_item,
-      async () => {
-        const claimKey = receiverClaimLeaseKey(state.work_item);
-        const claimOwner = receiverClaimLeaseOwner({
-          assignmentId: assignment.assignment_id,
-          runnerRepository: dispatched.target.repository,
-          workflowRunId: dispatched.workflow_run_id,
-          workflowRunAttempt: dispatched.run_attempt ?? 1,
-          source: "dispatch"
-        });
+    const fresh = await this.reconstruct(state.work_item);
+    const claim = await this.bindAssignmentRun({
+      reconstructed: fresh,
+      assignment,
+      runnerRepository: dispatched.target.repository,
+      workflowRunId: dispatched.workflow_run_id,
+      workflowRunAttempt: dispatched.run_attempt ?? 1,
+      status: "dispatched"
+    });
 
-        if (!this.store.acquireWorkLease({
-          workKey: claimKey,
-          owner: claimOwner,
-          leaseMs: RECEIVER_CLAIM_LEASE_MS
-        })) {
-          throw new Error("DURABLE_RUN_CLAIM_BUSY");
-        }
+    if (!claim.valid) {
+      throw new Error(`DURABLE_RUN_CLAIM_FAILED:${claim.reason}`);
+    }
 
-        try {
-          const fresh = await this.reconstruct(state.work_item);
-          const claim = await this.bindAssignmentRun({
-            reconstructed: fresh,
-            assignment,
-            runnerRepository: dispatched.target.repository,
-            workflowRunId: dispatched.workflow_run_id,
-            workflowRunAttempt: dispatched.run_attempt ?? 1,
-            status: "dispatched"
-          });
-
-          if (!claim.valid) {
-            throw new Error(`DURABLE_RUN_CLAIM_FAILED:${claim.reason}`);
-          }
-
-          return {
-            state: claim.state,
-            stateComment: claim.stateComment,
-            dispatched: {
-              ...dispatched,
-              durable_claim: true,
-              execution_instance_id: claim.execution_instance_id
-            }
-          };
-        } finally {
-          this.store.releaseWorkLease(claimKey, claimOwner);
-        }
+    return {
+      state: claim.state,
+      stateComment: claim.stateComment,
+      dispatched: {
+        ...dispatched,
+        durable_claim: true,
+        claim_id: claim.claim_grant?.claim_id ??
+          claim.state.claim_control?.active_claim?.claim_id,
+        claim_generation: claim.claim_grant?.claim_generation ??
+          claim.state.claim_control?.active_claim?.claim_generation,
+        execution_instance_id: claim.execution_instance_id
       }
-    );
+    };
   }
 
   async processWorkItem(workItem, observedAt = new Date().toISOString()) {
     const reconstructed = await this.reconstruct(workItem, observedAt);
+    if (reconstructed.snapshot.role_result) {
+      const claimResult = this.core.verifyRoleResultClaim({
+        state: reconstructed.state,
+        normalizedResult: reconstructed.snapshot.role_result.normalized ??
+          reconstructed.snapshot.role_result
+      });
+      if (!claimResult.valid) {
+        return {
+          action: { kind: "BLOCKED", reason: "ROLE_RESULT_CLAIM_INVALID" },
+          state: reconstructed.state,
+          dispatched: null,
+          safe_hold: true,
+          claim_reason: claimResult.reason
+        };
+      }
+    }
     const action = this.core.evaluate(
       this.profile,
       reconstructed.state,
@@ -800,6 +794,23 @@ export class MultiRepoOrchestrator {
       return { accepted: false, reason: "WORK_ITEM_NOT_IN_CONTROL_REPOSITORY" };
     }
 
+    const mutationKey = receiverClaimLeaseKey(workItem);
+    const mutationOwner = receiverClaimLeaseOwner({
+      assignmentId: assignment.assignment_id,
+      runnerRepository,
+      workflowRunId,
+      workflowRunAttempt,
+      source: "failure"
+    });
+    if (!this.store.acquireWorkLease({
+      workKey: mutationKey,
+      owner: mutationOwner,
+      leaseMs: RECEIVER_CLAIM_LEASE_MS
+    })) {
+      return { accepted: false, reason: "WORK_ITEM_MUTATION_BUSY" };
+    }
+
+    try {
     const evidenceWrite = await this.withReceiverClaimMutex(
       workItem,
       async () => {
@@ -882,6 +893,9 @@ export class MultiRepoOrchestrator {
       ...evidenceWrite,
       result
     };
+    } finally {
+      this.store.releaseWorkLease(mutationKey, mutationOwner);
+    }
   }
 
   async verifyAssignment(
