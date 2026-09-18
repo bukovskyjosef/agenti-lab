@@ -256,7 +256,8 @@ export function recoverClaim({
   reason,
   platformRunTerminalNonSuccess = false,
   heartbeatExpired = false,
-  humanAuthorizedClaimId = null
+  humanAuthorizedClaimId = null,
+  durableEvidenceRef = null
 }) {
   const active = claimControlOf(state).active_claim;
   if (!active) return { recovered: false, reason: "NO_ACTIVE_CLAIM", state };
@@ -275,7 +276,11 @@ export function recoverClaim({
   }
   const terminalReason =
     active.lease.mode === "EXPIRING_HEARTBEAT" ? "EXPIRED" : (reason ?? "ABORTED");
-  const terminalized = terminalizeClaim({ state, terminalReason });
+  const terminalized = terminalizeClaim({
+    state,
+    terminalReason,
+    durableEvidenceRef
+  });
   return { recovered: true, reason: terminalReason, state: terminalized.state };
 }
 
