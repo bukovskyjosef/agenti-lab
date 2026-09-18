@@ -285,6 +285,8 @@ function fakeGitHub({ issue, state, comments = [], runIds = [9001] }) {
         workflow_id: workflowId(repository, workflow),
         run_attempt: 1,
         event: "workflow_dispatch",
+        status: "in_progress",
+        conclusion: null,
         repository: { full_name: repository }
       };
       runs.set(String(runId), run);
@@ -310,14 +312,29 @@ function fakeGitHub({ issue, state, comments = [], runIds = [9001] }) {
       if (!run) throw new Error(`unknown fake run ${runId}`);
       return run;
     },
-    addRun({ repository, workflow, runId, runAttempt = 1 }) {
+    addRun({
+      repository,
+      workflow,
+      runId,
+      runAttempt = 1,
+      status = "in_progress",
+      conclusion = null
+    }) {
       runs.set(String(runId), {
         id: runId,
         workflow_id: workflowId(repository, workflow),
         run_attempt: runAttempt,
         event: "workflow_dispatch",
+        status,
+        conclusion,
         repository: { full_name: repository }
       });
+    },
+    setRunStatus(runId, { status, conclusion }) {
+      const run = runs.get(String(runId));
+      if (!run) throw new Error("unknown fake run " + runId);
+      run.status = status;
+      run.conclusion = conclusion;
     },
     currentState: () => currentState,
     dispatches,
@@ -430,9 +447,13 @@ test("F1 durable run claim survives total operational DB loss and rejects a seco
   assert.equal(first.state.assignment.dispatch_status, "dispatched");
   assert.equal(gh.dispatches.length, 1);
   assert.equal(
-    first.state.run_receipts[first.state.assignment.assignment_id]
-      .execution_instance_id,
+    first.state.claim_control.active_claim.owner.execution_instance_id,
     "github-actions:acme/control:9001:1"
+  );
+  assert.equal(
+    first.state.run_receipts[first.state.assignment.assignment_id],
+    undefined,
+    "claim acquisition must not create a semantic run receipt"
   );
 
   const dispatchedAssignment = JSON.parse(
@@ -594,9 +615,12 @@ test("F1 concurrent receiver preflights serialize from the same unclaimed GitHub
     "running"
   );
   assert.equal(
-    gh.currentState().run_receipts[assignment.assignment_id]
-      .execution_instance_id,
+    gh.currentState().claim_control.active_claim.owner.execution_instance_id,
     `github-actions:acme/control:${winnerRunId}:1`
+  );
+  assert.equal(
+    gh.currentState().run_receipts[assignment.assignment_id],
+    undefined
   );
 
   // A later retry by the losing run observes the durable GitHub owner and
@@ -941,4 +965,110 @@ test("F2 mutable H release evidence drift converges to APPROVED pending release 
   assert.equal(gh.dispatches.length, 0);
 
   store.close();
+});
+
+test("PLATFORM_RUN recovery survives DB loss and redispatches with a new claim generation", async () => {
+  const issue = {
+    number: 42,
+    title: "Recover failed platform run",
+    body: "Current contract",
+    updated_at: "2026-09-18T12:00:00Z",
+    labels: [{ name: "agenti:managed" }]
+  };
+  const projectProfile = profile();
+  projectProfile.work_item_claims = {
+    mutation_domain: "sqlite-shared-work-item-mutex",
+    recovery: { mode: "PLATFORM_RUN" },
+    material_write_fencing: "REQUIRED"
+  };
+  projectProfile.claim_mechanism_capabilities = {
+    linearizable_per_work_item_mutation_domain: true,
+    all_projection_writers_share_domain: true,
+    authoritative_claim_location: "O_PROJECTION",
+    material_write_fencing: "SHARED_DOMAIN",
+    supports_platform_run_recovery: true,
+    supports_heartbeat_lease: false
+  };
+
+  const gh = fakeGitHub({
+    issue,
+    state: baseState({ issue, role: "A", lifecycle: "ANALYSIS" }),
+    runIds: [9401, 9402]
+  });
+
+  const firstStore = new OperationalStore(":memory:");
+  const firstO = orchestrator({
+    gh,
+    store: firstStore,
+    projectProfile
+  });
+  const first = await firstO.processWorkItem(
+    workItem(),
+    "2026-09-18T12:01:00Z"
+  );
+  assert.equal(first.dispatched.dispatched, true);
+  const firstClaim = first.state.claim_control.active_claim;
+  assert.equal(firstClaim.claim_generation, 1);
+  assert.equal(String(firstClaim.owner.platform_run_id), "9401");
+  firstStore.close();
+
+  gh.setRunStatus(9401, {
+    status: "completed",
+    conclusion: "failure"
+  });
+
+  // Operational DB loss must not erase the durable failed claim.
+  const restartedStore = new OperationalStore(":memory:");
+  const restartedO = orchestrator({
+    gh,
+    store: restartedStore,
+    projectProfile
+  });
+  const recovered = await restartedO.processWorkItem(
+    workItem(),
+    "2026-09-18T12:02:00Z"
+  );
+
+  assert.equal(recovered.recovered, true);
+  assert.equal(recovered.action.reason, "PLATFORM_RUN_RECOVERED");
+  assert.equal(recovered.dispatched.dispatched, true);
+  assert.equal(gh.dispatches.length, 2);
+
+  const current = gh.currentState();
+  assert.equal(current.claim_control.active_claim.claim_generation, 2);
+  assert.equal(
+    String(current.claim_control.active_claim.owner.platform_run_id),
+    "9402"
+  );
+  assert.equal(
+    current.claim_control.last_terminal.claim_id,
+    firstClaim.claim_id
+  );
+  assert.equal(
+    current.claim_control.last_terminal.terminal_reason,
+    "FAILED"
+  );
+  assert.equal(
+    current.claim_control.last_terminal.durable_evidence_ref,
+    "actions-run:acme/control:9401"
+  );
+  assert.equal(
+    current.run_receipts[current.assignment.assignment_id],
+    undefined
+  );
+
+  const oldAssignment = JSON.parse(gh.dispatches[0].inputs.assignment_json);
+  const staleOldRun = await restartedO.verifyAssignment(
+    oldAssignment,
+    "acme/control",
+    "9401",
+    "1"
+  );
+  assert.equal(staleOldRun.valid, false);
+  assert.equal(
+    staleOldRun.reason,
+    "ASSIGNMENT_RUN_OWNERSHIP_CONFLICT"
+  );
+
+  restartedStore.close();
 });
