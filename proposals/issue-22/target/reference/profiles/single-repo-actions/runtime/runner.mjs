@@ -24,7 +24,7 @@ async function readJson(path) {
   return JSON.parse(await readFile(path, "utf8"));
 }
 
-async function loadRuntime() {
+export async function loadRuntime() {
   return {
     projectProfile: await readJson(".agenti/project-profile.json"),
     runtimeConfig: await readJson(".agenti/single-repo-actions.json"),
@@ -34,7 +34,7 @@ async function loadRuntime() {
   };
 }
 
-function assignmentFromState(state, profile) {
+export function assignmentFromState(state, profile) {
   if (!state.assignment) throw new Error("No current assignment");
   const a = state.assignment;
   return {
@@ -90,7 +90,7 @@ function writeOutput(name, value) {
   });
 }
 
-function sanitizeProposal(role, proposal) {
+export function sanitizeProposal(role, proposal) {
   const copy = structuredClone(proposal);
   copy.evidence_refs = [];
   if (role === "D") {
@@ -108,7 +108,7 @@ function sanitizeProposal(role, proposal) {
   return copy;
 }
 
-async function callback(github, runtimeConfig, issueNumber, assignmentId, resultRef) {
+export async function callback(github, runtimeConfig, issueNumber, assignmentId, resultRef) {
   await github.dispatchWorkflow(
     runtimeConfig.workflows?.orchestrate ?? "agenti-orchestrate.yml",
     {
