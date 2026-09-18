@@ -152,12 +152,16 @@ export function executionFailure({
   core,
   assignment,
   executionInstanceId,
+  claimId,
+  claimGeneration,
   status,
   observedAt,
   retryAt = null
 }) {
   const body = {
     failed_assignment_id: assignment.assignment_id,
+    claim_id: claimId,
+    claim_generation: claimGeneration,
     execution_instance_id: executionInstanceId,
     runner_candidate_id:
       assignment.execution_route.runner_candidate_id,
