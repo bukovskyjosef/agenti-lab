@@ -3,12 +3,15 @@ import { readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import {
   candidateDigest,
-  materialOperationId,
   normalizeRoleResult,
   verifyActiveClaim,
   validateSchema
 } from "../core/index.mjs";
 import { githubClientFromEnv } from "./github.mjs";
+import {
+  prepareDurableMaterialOperation,
+  resolveDurableMaterialOperation
+} from "./material-operation.mjs";
 import {
   ROLE_RESULT_MARKER,
   loadState,
@@ -107,26 +110,44 @@ export async function writeCandidate({
       ? assignment.candidate.members[0].head_sha
       : writerCurrent.target_binding?.base_sha;
   if (!baseRef) throw new Error("D_WRITE_IMMUTABLE_BASE_MISSING");
-  const materialOperation = materialOperationId({
-    state,
-    claimId: claimGrant.claim_id,
-    claimGeneration: claimGrant.claim_generation,
-    assignmentId: assignment.assignment_id,
-    operationKind: "D_CANDIDATE_REF_WRITE",
-    targetBinding: {
-      branch,
-      base_ref: baseRef,
-      claim_target_digest: claimGrant.binding.target_digest,
-      patch_sha256: sha256File(patchBytes)
-    }
-  });
-
   sh("git", ["fetch", "--no-tags", "origin", baseRef]);
   sh("git", ["checkout", "-B", branch, baseRef]);
   sh("git", ["apply", "--index", patchPath]);
   sh("git", ["config", "user.name", "agenti-deterministic-writer"]);
   sh("git", ["config", "user.email", "agenti-writer@users.noreply.github.com"]);
   sh("git", ["commit", "-m", "agenti: implement issue #" + issueNumber]);
+  const expectedHeadSha = sh(
+    "git",
+    ["rev-parse", "HEAD"],
+    { capture: true }
+  ).trim();
+  if (!/^[a-f0-9]{40}$/.test(expectedHeadSha)) {
+    throw new Error("D_WRITE_EXPECTED_HEAD_INVALID");
+  }
+
+  const targetBinding = {
+    repository: github.repository,
+    branch,
+    base_ref: baseRef,
+    expected_head_sha: expectedHeadSha,
+    claim_target_digest: claimGrant.binding.target_digest,
+    patch_sha256: sha256File(patchBytes)
+  };
+  const preparedMaterial = await prepareDurableMaterialOperation({
+    github,
+    runtime,
+    loaded,
+    state,
+    assignment,
+    claimGrant,
+    executionInstanceId:
+      runContext.attestation?.execution_instance_id,
+    operationKind: "D_CANDIDATE_REF_WRITE",
+    targetBinding
+  });
+  const materialOperation =
+    preparedMaterial.material_operation.material_operation_id;
+
   sh("git", ["push", "--force-with-lease", "origin", "HEAD:refs/heads/" + branch]);
 
   let pull = await github.findPullByHead(branch);
@@ -145,6 +166,17 @@ export async function writeCandidate({
   } else {
     pull = await github.getPull(pull.number);
   }
+
+  await resolveDurableMaterialOperation({
+    github,
+    runtime,
+    issueNumber,
+    materialOperationId: materialOperation,
+    outcome: "APPLIED",
+    evidenceRef:
+      "candidate-pr:" + String(pull.number) + "@" +
+      String(pull.head?.sha ?? expectedHeadSha)
+  });
 
   const member = {
     repository: github.repository,
