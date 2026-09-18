@@ -36,15 +36,30 @@ function baseAction(table, id, state, snapshot, extras = {}) {
   };
 }
 
-function assignmentFor({ state, snapshot, transition, projectProfile, issuedAt }) {
+function assignmentFor({
+  state,
+  snapshot,
+  transition,
+  projectProfile,
+  issuedAt,
+  projected = {}
+}) {
   if (!transition.assignment) return null;
   const role = transition.assignment.role;
   const mustDiffer = role === "R"
     ? [...new Set(snapshot?.author_execution_instances ?? state?.review?.author_execution_instances ?? [])]
     : [];
 
+  const bindingState = {
+    ...state,
+    state_version: state.state_version + 1,
+    lifecycle: projected.lifecycle ?? state.lifecycle,
+    candidate: projected.candidate ?? state.candidate,
+    contract: projected.contract ?? state.contract
+  };
+
   return generateAssignment({
-    state,
+    state: bindingState,
     role,
     purpose: transition.assignment.purpose,
     issued_at: issuedAt,
@@ -87,7 +102,7 @@ export function evaluate(projectProfile, workflowState, authoritativeSnapshot, w
 
     const initialState = {
       work_item: snapshot.work_item,
-      state_version: snapshot.initial_state_version ?? 0,
+      state_version: snapshot.initial_state_version ?? 1,
       lifecycle: "ANALYSIS",
       contract: {
         source_ref: snapshot.contract_source_ref ?? ("issue:" + snapshot.work_item.issue_number),
@@ -99,12 +114,22 @@ export function evaluate(projectProfile, workflowState, authoritativeSnapshot, w
       review: { author_execution_instances: [] }
     };
     const transition = transitionById(transitionTable, "T01");
-    const assignment = assignmentFor({
+    const assignment = generateAssignment({
       state: initialState,
-      snapshot,
-      transition,
-      projectProfile,
-      issuedAt
+      role: "A",
+      purpose: transition.assignment.purpose,
+      issued_at: issuedAt,
+      context_entrypoints: snapshot.context_entrypoints ?? [
+        { kind: "work_item", ref: initialState.work_item.control_repository + "#" + initialState.work_item.issue_number },
+        { kind: "project_profile", ref: ".agenti/project-profile.yml" },
+        { kind: "agent_entrypoint", ref: "AGENTS.md" }
+      ],
+      execution_repository: snapshot.execution_repository ?? null,
+      relevant_inputs: {
+        required_evidence_digest: snapshot.required_evidence_digest ?? null,
+        target_digest: snapshot.target_digest ?? null,
+        role_result_digest: null
+      }
     });
 
     return {
@@ -193,7 +218,8 @@ export function evaluate(projectProfile, workflowState, authoritativeSnapshot, w
   if (snapshot.release_response?.status === "GRANTED") {
     const transition = transitionById(transitionTable, "T09");
     const assignment = assignmentFor({
-      state: workflowState, snapshot, transition, projectProfile, issuedAt
+      state: workflowState, snapshot, transition, projectProfile, issuedAt,
+      projected: { lifecycle: "APPROVED" }
     });
     return baseAction(transitionTable, "T09", workflowState, snapshot, {
       lifecycle: "APPROVED",
@@ -263,7 +289,8 @@ export function evaluate(projectProfile, workflowState, authoritativeSnapshot, w
       ) {
         const transition = transitionById(transitionTable, "T02");
         const assignment = assignmentFor({
-          state: workflowState, snapshot, transition, projectProfile, issuedAt
+          state: workflowState, snapshot, transition, projectProfile, issuedAt,
+          projected: { lifecycle: "IN_PROGRESS" }
         });
         return baseAction(transitionTable, "T02", workflowState, snapshot, {
           lifecycle: "IN_PROGRESS",
@@ -283,9 +310,9 @@ export function evaluate(projectProfile, workflowState, authoritativeSnapshot, w
       !snapshot.pending_human_request
     ) {
       const transition = transitionById(transitionTable, "T04");
-      const stateWithCandidate = { ...workflowState, candidate: snapshot.candidate };
       const assignment = assignmentFor({
-        state: stateWithCandidate, snapshot, transition, projectProfile, issuedAt
+        state: workflowState, snapshot, transition, projectProfile, issuedAt,
+        projected: { lifecycle: "IN_REVIEW", candidate: snapshot.candidate }
       });
       return baseAction(transitionTable, "T04", workflowState, snapshot, {
         lifecycle: "IN_REVIEW",
@@ -317,7 +344,8 @@ export function evaluate(projectProfile, workflowState, authoritativeSnapshot, w
 
         const transition = transitionById(transitionTable, "T05");
         const assignment = assignmentFor({
-          state: workflowState, snapshot, transition, projectProfile, issuedAt
+          state: workflowState, snapshot, transition, projectProfile, issuedAt,
+          projected: { lifecycle: "CHANGES_REQUIRED" }
         });
         return baseAction(transitionTable, "T05", workflowState, snapshot, {
           lifecycle: "CHANGES_REQUIRED",
@@ -332,7 +360,8 @@ export function evaluate(projectProfile, workflowState, authoritativeSnapshot, w
       if (outcome === "CHANGES_REQUIRED" && owner === "A") {
         const transition = transitionById(transitionTable, "T06");
         const assignment = assignmentFor({
-          state: workflowState, snapshot, transition, projectProfile, issuedAt
+          state: workflowState, snapshot, transition, projectProfile, issuedAt,
+          projected: { lifecycle: "ANALYSIS" }
         });
         return baseAction(transitionTable, "T06", workflowState, snapshot, {
           lifecycle: "ANALYSIS",
@@ -376,7 +405,8 @@ export function evaluate(projectProfile, workflowState, authoritativeSnapshot, w
 
         const transition = transitionById(transitionTable, "T08");
         const assignment = assignmentFor({
-          state: workflowState, snapshot, transition, projectProfile, issuedAt
+          state: workflowState, snapshot, transition, projectProfile, issuedAt,
+          projected: { lifecycle: "APPROVED" }
         });
         return baseAction(transitionTable, "T08", workflowState, snapshot, {
           lifecycle: "APPROVED",
@@ -394,7 +424,8 @@ export function evaluate(projectProfile, workflowState, authoritativeSnapshot, w
       if (snapshot.post_publication_r_required) {
         const transition = transitionById(transitionTable, "T11");
         const assignment = assignmentFor({
-          state: workflowState, snapshot, transition, projectProfile, issuedAt
+          state: workflowState, snapshot, transition, projectProfile, issuedAt,
+          projected: { lifecycle: workflowState.lifecycle }
         });
         return baseAction(transitionTable, "T11", workflowState, snapshot, {
           assignment,
