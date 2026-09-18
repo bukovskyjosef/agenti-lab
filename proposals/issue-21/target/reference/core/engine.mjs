@@ -84,6 +84,170 @@ function assignmentFor({
   });
 }
 
+function releaseAuthorizationContextDigest({
+  authorization_id,
+  candidate_digest,
+  target_digest,
+  gate_digest
+}) {
+  return digest({
+    authorization_id,
+    candidate_digest,
+    target_digest,
+    gate_digest
+  });
+}
+
+function makeReleaseAuthorization(workflowState, snapshot) {
+  const candidateDigest = workflowState.candidate?.digest ?? null;
+  const targetDigest = snapshot.target_digest ?? null;
+  const gateDigest = snapshot.required_evidence_digest ?? null;
+  const authorizationId =
+    "ra-" +
+    digest({
+      work_item: workflowState.work_item,
+      state_version: workflowState.state_version + 1,
+      candidate_digest: candidateDigest,
+      target_digest: targetDigest,
+      gate_digest: gateDigest
+    }).slice(7, 31);
+
+  return {
+    status: "PENDING",
+    authorization_id: authorizationId,
+    candidate_digest: candidateDigest,
+    target_digest: targetDigest,
+    gate_digest: gateDigest,
+    context_digest: releaseAuthorizationContextDigest({
+      authorization_id: authorizationId,
+      candidate_digest: candidateDigest,
+      target_digest: targetDigest,
+      gate_digest: gateDigest
+    }),
+    request_ref: null,
+    response_ref: null,
+    human_actor_id: null
+  };
+}
+
+function validateReleaseGrant(projectProfile, workflowState, snapshot) {
+  const authorization = workflowState.release_authorization;
+  const response = snapshot.release_response;
+
+  if (!authorization || authorization.status !== "PENDING") {
+    return {
+      valid: false,
+      reason: "RELEASE_AUTHORIZATION_NOT_CURRENT_PENDING",
+      earliest_affected_point: "APPROVED"
+    };
+  }
+
+  if (!response || response.status !== "GRANTED") {
+    return {
+      valid: false,
+      reason: "RELEASE_RESPONSE_NOT_CURRENT_GRANT",
+      earliest_affected_point: "APPROVED"
+    };
+  }
+
+  const currentCandidate = workflowState.candidate?.digest ?? null;
+  const currentTarget = snapshot.target_digest ?? null;
+  const currentGateDigest = snapshot.required_evidence_digest ?? null;
+
+  if (
+    authorization.authorization_id !== response.authorization_id ||
+    authorization.candidate_digest !== currentCandidate ||
+    response.candidate_digest !== currentCandidate
+  ) {
+    return {
+      valid: false,
+      reason: "RELEASE_CANDIDATE_OR_AUTHORIZATION_DRIFT",
+      earliest_affected_point: "IN_REVIEW"
+    };
+  }
+
+  if (
+    authorization.target_digest !== currentTarget ||
+    response.target_digest !== currentTarget
+  ) {
+    return {
+      valid: false,
+      reason: "RELEASE_TARGET_DRIFT",
+      earliest_affected_point: "APPROVED"
+    };
+  }
+
+  if (
+    snapshot.required_gates_current !== true ||
+    authorization.gate_digest !== currentGateDigest ||
+    response.gate_digest !== currentGateDigest
+  ) {
+    return {
+      valid: false,
+      reason: "RELEASE_GATE_DRIFT",
+      earliest_affected_point: "IN_REVIEW"
+    };
+  }
+
+  const expectedContext = releaseAuthorizationContextDigest({
+    authorization_id: authorization.authorization_id,
+    candidate_digest: currentCandidate,
+    target_digest: currentTarget,
+    gate_digest: currentGateDigest
+  });
+
+  if (
+    authorization.context_digest !== expectedContext ||
+    response.context_digest !== expectedContext
+  ) {
+    return {
+      valid: false,
+      reason: "RELEASE_CONTEXT_DRIFT",
+      earliest_affected_point: "APPROVED"
+    };
+  }
+
+  const humanActorIds = new Set(
+    (projectProfile?.human?.principals ?? []).map((principal) => principal.actor_id)
+  );
+  if (
+    !response.response_binding ||
+    !response.current_response ||
+    response.response_binding.normalized_outcome !== "GRANTED" ||
+    !humanActorIds.has(response.response_binding.actor_id)
+  ) {
+    return {
+      valid: false,
+      reason: "RELEASE_HUMAN_RESPONSE_INVALID",
+      earliest_affected_point: "APPROVED"
+    };
+  }
+
+  const evidence = verifyAcceptedEvidence(
+    response.response_binding,
+    response.current_response,
+    expectedContext
+  );
+  if (evidence.status !== "CURRENT") {
+    return {
+      valid: false,
+      reason: evidence.reason,
+      evidence_status: evidence.status,
+      earliest_affected_point: "APPROVED"
+    };
+  }
+
+  return {
+    valid: true,
+    authorization: {
+      ...authorization,
+      status: "GRANTED",
+      response_ref: response.response_binding,
+      human_actor_id: response.response_binding.actor_id
+    }
+  };
+}
+
 export function evaluate(projectProfile, workflowState, authoritativeSnapshot, wakeEvent, transitionTable) {
   const profileErrors = validateProjectProfileSemantics(projectProfile);
   const tableErrors = validateTransitionTable(transitionTable);
@@ -215,7 +379,23 @@ export function evaluate(projectProfile, workflowState, authoritativeSnapshot, w
     });
   }
 
-  if (snapshot.release_response?.status === "GRANTED") {
+  if (snapshot.release_response) {
+    const releaseValidation = validateReleaseGrant(
+      projectProfile,
+      workflowState,
+      snapshot
+    );
+
+    if (!releaseValidation.valid) {
+      return {
+        kind: "INVALIDATE",
+        reason: releaseValidation.reason,
+        evidence_status: releaseValidation.evidence_status ?? null,
+        earliest_affected_point: releaseValidation.earliest_affected_point,
+        stale: ["release_authorization", "assignment", "publication"]
+      };
+    }
+
     const transition = transitionById(transitionTable, "T09");
     const assignment = assignmentFor({
       state: workflowState, snapshot, transition, projectProfile, issuedAt,
@@ -224,10 +404,10 @@ export function evaluate(projectProfile, workflowState, authoritativeSnapshot, w
     return baseAction(transitionTable, "T09", workflowState, snapshot, {
       lifecycle: "APPROVED",
       assignment,
-      release_authorization: snapshot.release_response,
+      release_authorization: releaseValidation.authorization,
       idempotence_inputs: {
-        authorization_id: snapshot.release_response.authorization_id,
-        response_binding: snapshot.release_response.response_binding
+        authorization_id: releaseValidation.authorization.authorization_id,
+        response_binding: releaseValidation.authorization.response_ref
       }
     });
   }
@@ -388,17 +568,18 @@ export function evaluate(projectProfile, workflowState, authoritativeSnapshot, w
 
       if (outcome === "APPROVED" && snapshot.required_gates_current) {
         if (projectProfile.release_authorization.required) {
+          const releaseAuthorization = makeReleaseAuthorization(
+            workflowState,
+            snapshot
+          );
           return baseAction(transitionTable, "T08", workflowState, snapshot, {
             lifecycle: "APPROVED",
-            release_authorization: {
-              status: "PENDING",
-              candidate_digest: workflowState.candidate.digest,
-              target_digest: snapshot.target_digest
-            },
+            release_authorization: releaseAuthorization,
             idempotence_inputs: {
-              candidate_digest: workflowState.candidate.digest,
-              target_digest: snapshot.target_digest,
-              gates: snapshot.required_evidence_digest
+              authorization_id: releaseAuthorization.authorization_id,
+              candidate_digest: releaseAuthorization.candidate_digest,
+              target_digest: releaseAuthorization.target_digest,
+              gates: releaseAuthorization.gate_digest
             }
           });
         }
@@ -497,11 +678,20 @@ export function projectAction(state, action, oRunId) {
   if (action.clear_assignment) next.assignment = null;
 
   if (action.assignment) {
+    const expectedBoundStateVersion = state.state_version + 1;
+    if (action.assignment.state.version !== expectedBoundStateVersion) {
+      throw new Error(
+        "Assignment must bind the post-transition projection version " +
+        expectedBoundStateVersion
+      );
+    }
+
     next.assignment = {
       assignment_id: action.assignment.assignment_id,
       role: action.assignment.role,
       purpose: action.assignment.purpose,
       issued_from_state_version: state.state_version,
+      bound_state_version: action.assignment.state.version,
       fingerprint: action.assignment.state.fingerprint,
       capability_profile: action.assignment.capability_profile,
       dispatch_status: "pending",
