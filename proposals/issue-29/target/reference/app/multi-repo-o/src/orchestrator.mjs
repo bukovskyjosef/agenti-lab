@@ -275,6 +275,65 @@ export class MultiRepoOrchestrator {
     }
   }
 
+  async materializeHumanRequest(workItem, state, action) {
+    if (!action.human_request || action.human_request.request_ref) {
+      return action;
+    }
+
+    const proposed = action.human_request;
+    const requestId =
+      "hir-" + action.idempotence_key.slice(-16);
+    const contextDigest = this.core.digest({
+      request_id: requestId,
+      state_version: state.state_version,
+      contract_digest: state.contract.digest,
+      candidate_digest: state.candidate?.digest ?? null,
+      action_idempotence_key: action.idempotence_key
+    });
+    const normalizedPayload = {
+      request_id: requestId,
+      type: proposed.type ?? "DECISION",
+      status: "PENDING",
+      raised_by: proposed.raised_by ?? "O",
+      context_digest: contextDigest,
+      resolution_route:
+        proposed.resolution_route ?? "ANALYST_REEVALUATE"
+    };
+    const comment = await this.gh.createIssueComment(
+      workItem.control_repository,
+      workItem.issue_number,
+      [
+        "Human input required.",
+        "",
+        proposed.question ??
+          "Human decision is required before automated delivery can continue.",
+        "",
+        "Resolve with:",
+        "/agenti resolve " + requestId,
+        "<answer>"
+      ].join("\n")
+    );
+    const requestRef = this.core.acceptMutableEvidence({
+      evidence_kind: "issue_comment",
+      repository: workItem.control_repository,
+      object_id: comment.id,
+      actor_id: comment.user?.id,
+      updated_at: comment.updated_at ?? comment.created_at,
+      normalized_payload: normalizedPayload,
+      normalized_outcome: "PENDING",
+      context_binding: contextDigest
+    });
+
+    return {
+      ...action,
+      human_request: {
+        ...normalizedPayload,
+        request_ref: requestRef,
+        response_ref: null
+      }
+    };
+  }
+
   async verifyRunnerWorkflowRun({
     assignment,
     runnerRepository,
@@ -577,11 +636,17 @@ export class MultiRepoOrchestrator {
       throw new Error(`Unsupported core action ${action.kind}`);
     }
 
-    const oRunId = `o:${workItemKey(workItem)}:${action.idempotence_key}`;
+    const materializedAction = await this.materializeHumanRequest(
+      workItem,
+      reconstructed.state,
+      action
+    );
+    const oRunId =
+      `o:${workItemKey(workItem)}:${materializedAction.idempotence_key}`;
     const nextState = projectAdapterState({
       core: this.core,
       state: reconstructed.state,
-      action,
+      action: materializedAction,
       snapshot: reconstructed.snapshot,
       profile: this.profile,
       oRunId
@@ -597,8 +662,12 @@ export class MultiRepoOrchestrator {
       trustedStateAppId: this.trustedStateAppId
     });
 
-    if (!action.assignment) {
-      return { action, state: nextState, dispatched: null };
+    if (!materializedAction.assignment) {
+      return {
+        action: materializedAction,
+        state: nextState,
+        dispatched: null
+      };
     }
 
     const ensured = await this.ensureCurrentAssignmentDispatched(
@@ -611,7 +680,7 @@ export class MultiRepoOrchestrator {
     );
 
     return {
-      action,
+      action: materializedAction,
       state: ensured.state,
       dispatched: ensured.dispatched
     };
