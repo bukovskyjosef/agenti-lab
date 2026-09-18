@@ -21,6 +21,6 @@ PLATFORM_RUN recovery requires authoritative GitHub Actions terminal non-success
 
 ## App reference
 
-The single-node reference uses one SQLite work-item mutex for O/claim/failure/material prepare/resolve while GitHub remains authority. Declared multi-instance use with that local SQLite domain is rejected.
+The single-node reference uses one non-expiring in-process FIFO work-item fence for O/claim/failure/recovery/material prepare/resolve while GitHub remains authority. Expiring SQLite leases are operational queue/retry aids only. Declared multi-instance use with that process-local domain is rejected.
 
 Remote material writers use PREPARED/RESOLVE control-projection fencing; they do not rely on a precheck-only verification.
