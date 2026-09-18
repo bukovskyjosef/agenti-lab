@@ -566,6 +566,17 @@ async function buildSnapshot(github, runtime, state, issue, comments) {
   } else if (state.candidate.kind === "single") {
     const checks = await checkSnapshot(github, runtime.projectProfile, state.candidate);
     Object.assign(snapshot, checks);
+    if (state.assignment?.role === "P" && !checks.required_gates_current) {
+      snapshot.drift = { ...(snapshot.drift ?? {}), gate_changed: true };
+    }
+  }
+
+  if (
+    state.assignment?.role === "P" &&
+    state.release_authorization.status === "GRANTED" &&
+    state.release_authorization.target_digest !== snapshot.target_digest
+  ) {
+    snapshot.drift = { ...(snapshot.drift ?? {}), publication_changed: true };
   }
 
   const hCommands = humanComments(comments, runtime.projectProfile);
