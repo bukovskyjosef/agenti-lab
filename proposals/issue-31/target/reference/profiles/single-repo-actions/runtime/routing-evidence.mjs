@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import {
   digest,
+  verifyActiveClaim,
   validateBillingSafetyObservation,
   validateCapacityObservation,
   validateSchema
@@ -158,6 +159,17 @@ export async function recordExecutionFailure({
   }
 
   const context = JSON.parse(await readFile(contextPath, "utf8"));
+  const claimGrant = context.claim_grant;
+  const claimCheck = verifyActiveClaim({
+    state,
+    assignmentId,
+    claimId: claimGrant?.claim_id,
+    claimGeneration: claimGrant?.claim_generation,
+    executionInstanceId: context.attestation?.execution_instance_id
+  });
+  if (!claimCheck.valid) {
+    throw new Error("EXECUTION_FAILURE_CLAIM_NOT_CURRENT: " + claimCheck.reason);
+  }
   const observedAt = new Date().toISOString();
   const observation = capacityObservation({
     candidateId: state.assignment.execution_route.runner_candidate_id,
@@ -167,6 +179,8 @@ export async function recordExecutionFailure({
   });
   const failureCore = {
     failed_assignment_id: assignmentId,
+    claim_id: claimGrant.claim_id,
+    claim_generation: claimGrant.claim_generation,
     execution_instance_id:
       context.attestation.execution_instance_id,
     runner_candidate_id:
