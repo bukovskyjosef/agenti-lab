@@ -236,7 +236,9 @@
         "assignment_id",
         "observed_state_version",
         "observed_fingerprint",
-        "execution_attestation"
+        "execution_attestation",
+        "claim_id",
+        "claim_generation"
       ],
       "properties": {
         "assignment_id": {
@@ -289,6 +291,14 @@
             "PREPAID_CREDIT",
             "METERED"
           ]
+        },
+        "claim_id": {
+          "type": "string",
+          "pattern": "^clm-"
+        },
+        "claim_generation": {
+          "type": "integer",
+          "minimum": 1
         }
       }
     },
