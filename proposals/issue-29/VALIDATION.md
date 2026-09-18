@@ -17,17 +17,39 @@ GitHub-hosted combined validation has been executed successfully against the com
 
 - immutable dependency materialization: PASS
 - all assembled `.mjs` syntax: PASS
-- shared core + Child 5 routing tests: **40/40 PASS**
+- shared core + Child 5 routing tests: **45/45 PASS**
 - legacy Project Profile doctor: **OK**
 - routed Project Profile doctor: **OK**
 - routing/billing/Interface static conformance: **4/4 PASS**
 - inherited single-repo privilege/wiring static suite: **5/5 PASS**
 - routed single-repo local E2E `H → O → A → D → R → H release → P → O Done`: **1/1 PASS**
-- integrated multi-repo suite: **17/17 PASS**
+- integrated multi-repo suite: **18/18 PASS**
 - Child 5 combined exact-target validation: **OK**
 - integrated multi-repo Docker build: **PASS**
 
 The complete review metadata is included in the final validation pass. After that green run, the temporary branch-only validation workflow is deleted; the exact R head must differ from the tested head only by deletion of that temporary workflow.
+
+## F1–F3 corrective proof
+
+Independent R review `5251390350` / Issue comment `5734662198` returned three bounded defects against rejected head `2e8861b04e558538c0f684e3717de7516f533f6c`.
+
+The corrective target adds executable proof that:
+
+- **F1:** `INCLUDED_ALLOWANCE` remains a strict no-incremental-spend class under every policy; `ALLOWED_WITH_BUDGET` does not bypass billing-safety evidence; hidden incremental-paid declarations are doctor-invalid; paid candidates still require explicit budget + hard enforcement.
+- **F2:** accepted routing-recoverable `UNAVAILABLE` execution evidence is emitted as T14-routable by the adapters and the core reroutes the same role/purpose or waits.
+- **F3:** reaching `max_wait_deadline` produces an existing T15 Human boundary and clears the routing wait, preventing indefinite re-wait. Only the implemented `on_max_wait: HUMAN` mode remains schema-supported.
+
+Corrective combined run `35383370110` was green before documentation close-out:
+- core/routing **45/45 PASS**;
+- doctors **OK / OK**;
+- routing static **4/4 PASS**;
+- inherited single-repo static **5/5 PASS**;
+- routed single-repo E2E **1/1 PASS**;
+- integrated multi-repo **18/18 PASS**;
+- Docker **PASS**;
+- combined exact-target validation **OK**.
+
+A final close-out run is required after these documentation/checklist updates; its run ID and exact tested/final heads are recorded durably on Issue #29 / PR #38.
 
 ## Conformance matrix
 
