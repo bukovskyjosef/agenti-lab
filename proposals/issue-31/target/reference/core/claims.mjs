@@ -415,7 +415,13 @@ export function resolveMaterialOperation({
       material_operation: state.material_operation
     };
   }
-  if (state.material_operation.status !== "PREPARED") {
+  const allowedEscalation =
+    state.material_operation.status === "APPLIED" &&
+    outcome === "HUMAN_ACTION_REQUIRED";
+  if (
+    state.material_operation.status !== "PREPARED" &&
+    !allowedEscalation
+  ) {
     return {
       resolved: false,
       reason: "MATERIAL_OPERATION_NOT_PREPARED",
