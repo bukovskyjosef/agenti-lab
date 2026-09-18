@@ -390,7 +390,8 @@
         "IN_PROGRESS",
         "IN_REVIEW",
         "CHANGES_REQUIRED",
-        "APPROVED"
+        "APPROVED",
+        "BLOCKED"
       ],
       "wake": [
         "BLOCKER_CHANGED",
@@ -399,7 +400,8 @@
       "guard": "temporarily_impossible_no_independent_work",
       "writes": [
         "LIFECYCLE_BLOCKED",
-        "CLEAR_ASSIGNMENT"
+        "CLEAR_ASSIGNMENT",
+        "MAYBE_CREATE_HIR"
       ],
       "assignment": null,
       "idempotence": [
