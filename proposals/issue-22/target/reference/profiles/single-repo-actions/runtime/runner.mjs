@@ -148,7 +148,7 @@ export async function prepareRun({ role, issueNumber, assignmentId, outDir = ".a
   }
 
   const attestation = {
-    adapter_id: "codex-action",
+    adapter_id: role === "P" ? "deterministic-actions-publisher" : "codex-action",
     adapter_version: "1",
     execution_instance_id: executionInstanceId,
     platform_run: {
