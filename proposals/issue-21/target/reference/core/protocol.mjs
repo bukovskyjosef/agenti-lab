@@ -27,6 +27,7 @@ const ANALYST_SECTIONS = new Set([
 export function fingerprint({ role, purpose, state, relevant_inputs }) {
   return digest({
     work_item: state.work_item,
+    state_version: state.state_version,
     lifecycle: state.lifecycle,
     role,
     purpose,
