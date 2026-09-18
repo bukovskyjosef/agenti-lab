@@ -846,3 +846,235 @@ test("same provider D/R remains independent through distinct execution instance"
   });
   assert.equal(accepted.accepted, true);
 });
+
+
+test("F1 included allowance cannot become hidden paid spillover under ALLOWED_WITH_BUDGET", () => {
+  const routed = structuredClone(profile);
+  const policy = routed.execution_routing.policies[0];
+  policy.candidates = ["included-primary"];
+  policy.paid_execution = {
+    mode: "ALLOWED_WITH_BUDGET",
+    budget: { currency: "USD", max_per_run: 2 },
+    enforcement: "ADAPTER_HARD_LIMIT"
+  };
+
+  const withoutSafety = selectRunnerCandidate({
+    profile: routed,
+    role: "D",
+    purpose: "IMPLEMENT_CURRENT_CONTRACT",
+    capability_profile: "D_WORKSPACE_WRITE",
+    semantic_work_digest: digest({ work: "f1-safety" }),
+    capacity_observations: [
+      capacity("included-primary", "AVAILABLE")
+    ],
+    billing_safety_observations: [],
+    routing_attempt_generation: 0,
+    observed_at: OBSERVED
+  });
+  assert.equal(withoutSafety.kind, "WAIT");
+  assert.equal(
+    withoutSafety.attempted_candidates[0].ineligible_reason,
+    "BILLING_SAFETY_UNKNOWN"
+  );
+
+  routed.execution_routing.runner_catalog[
+    "included-primary"
+  ].billing.incremental_paid_usage = true;
+  const errors = validateRoutingConfiguration(routed);
+  assert.ok(
+    errors.some((error) =>
+      error.includes("cannot declare incremental_paid_usage")
+    )
+  );
+
+  const invalidSpillover = selectRunnerCandidate({
+    profile: routed,
+    role: "D",
+    purpose: "IMPLEMENT_CURRENT_CONTRACT",
+    capability_profile: "D_WORKSPACE_WRITE",
+    semantic_work_digest: digest({ work: "f1-spillover" }),
+    capacity_observations: [
+      capacity("included-primary", "AVAILABLE")
+    ],
+    billing_safety_observations: [
+      billingSafety("included-primary")
+    ],
+    routing_attempt_generation: 0,
+    observed_at: OBSERVED
+  });
+  assert.equal(invalidSpillover.kind, "WAIT");
+  assert.equal(
+    invalidSpillover.attempted_candidates[0].ineligible_reason,
+    "INCLUDED_ALLOWANCE_PAID_SPILLOVER_DECLARATION_INVALID"
+  );
+});
+
+test("F1 ALLOWED_WITH_BUDGET policy itself requires budget and enforcement", () => {
+  const noBudget = structuredClone(profile);
+  noBudget.execution_routing.policies[0].paid_execution = {
+    mode: "ALLOWED_WITH_BUDGET"
+  };
+  let errors = validateRoutingConfiguration(noBudget);
+  assert.ok(errors.some((error) => error.includes("requires an explicit budget")));
+  assert.ok(errors.some((error) => error.includes("requires hard-limit enforcement")));
+
+  const noEnforcement = structuredClone(profile);
+  noEnforcement.execution_routing.policies[0].paid_execution = {
+    mode: "ALLOWED_WITH_BUDGET",
+    budget: { currency: "USD", max_per_run: 1 }
+  };
+  errors = validateRoutingConfiguration(noEnforcement);
+  assert.ok(errors.some((error) => error.includes("requires hard-limit enforcement")));
+});
+
+test("F2 UNAVAILABLE mid-assignment uses T14 same-authority fallback", () => {
+  const first = routeD({
+    capacities: [capacity("included-primary", "AVAILABLE")]
+  });
+  const state = projectAction(
+    structuredClone(baseState),
+    first,
+    "o-f2-start"
+  );
+  const old = first.assignment;
+
+  const reroute = evaluate(
+    profile,
+    state,
+    {
+      failure: {
+        transient: true,
+        objective_retry_reason: "ROUTING_EXECUTION_FAILURE",
+        failed_assignment_id: old.assignment_id,
+        semantic_work_digest: old.semantic_work_digest,
+        execution_instance_id: "exec-d-unavailable",
+        capacity_status: "UNAVAILABLE",
+        ref: "failure:unavailable",
+        evidence_digest: digest({ failure: "unavailable" })
+      },
+      capacity_observations: [
+        capacity("included-primary", "UNAVAILABLE"),
+        capacity("included-secondary", "AVAILABLE")
+      ],
+      billing_safety_observations: [
+        billingSafety("included-primary")
+      ]
+    },
+    { observed_at: "2026-09-18T12:05:00Z" },
+    transitionTable
+  );
+
+  assert.equal(reroute.transition_id, "T14");
+  assert.equal(reroute.assignment.role, "D");
+  assert.equal(
+    reroute.assignment.execution_route.runner_candidate_id,
+    "included-secondary"
+  );
+  assert.equal(
+    reroute.assignment.semantic_work_digest,
+    old.semantic_work_digest
+  );
+  assert.equal(
+    reroute.failed_run_receipt.completion_status,
+    "FAILED_BEFORE_RESULT"
+  );
+});
+
+test("F3 max-wait deadline escalates through T15 Human boundary and stops re-waiting", () => {
+  const waitAction = routeD({
+    capacities: [
+      capacity("included-primary", "TEMPORARILY_EXHAUSTED", {
+        retryAt: "2026-09-18T12:30:00Z"
+      }),
+      capacity("included-secondary", "RATE_LIMITED", {
+        retryAt: "2026-09-18T12:20:00Z"
+      })
+    ]
+  });
+  const waiting = projectAction(
+    structuredClone(baseState),
+    waitAction,
+    "o-f3-wait"
+  );
+  assert.equal(
+    waiting.execution_routing.wait.max_wait_deadline,
+    "2026-09-18T18:00:00.000Z"
+  );
+
+  const expired = evaluate(
+    profile,
+    waiting,
+    {
+      capacity_observations: [
+        capacity("included-primary", "TEMPORARILY_EXHAUSTED", {
+          observedAt: "2026-09-18T18:00:00Z",
+          validUntil: "2026-09-18T19:00:00Z",
+          retryAt: "2026-09-18T18:30:00Z"
+        }),
+        capacity("included-secondary", "RATE_LIMITED", {
+          observedAt: "2026-09-18T18:00:00Z",
+          validUntil: "2026-09-18T19:00:00Z",
+          retryAt: "2026-09-18T18:20:00Z"
+        })
+      ],
+      billing_safety_observations: [
+        {
+          ...billingSafety("included-primary"),
+          observed_at: "2026-09-18T18:00:00Z",
+          valid_until: "2026-09-18T19:00:00Z",
+          evidence_digest: digest({
+            runner_candidate_id: "included-primary",
+            status: "VERIFIED_NO_PAID_SPILLOVER",
+            observed_at: "2026-09-18T18:00:00Z",
+            valid_until: "2026-09-18T19:00:00Z",
+            source: {
+              kind: "ADMIN_POLICY_ATTESTATION",
+              trust: "EXTERNAL_CURRENT_EVIDENCE"
+            }
+          })
+        }
+      ]
+    },
+    { observed_at: "2026-09-18T18:00:00Z" },
+    transitionTable
+  );
+
+  assert.equal(expired.transition_id, "T15");
+  assert.equal(expired.lifecycle, "BLOCKED");
+  assert.equal(expired.assignment, undefined);
+  assert.equal(expired.human_request.raised_by, "O");
+  assert.equal(
+    expired.human_request.resolution_route,
+    "ANALYST_REEVALUATE"
+  );
+  assert.equal(expired.execution_routing.pending, null);
+  assert.equal(expired.execution_routing.wait.status, "NONE");
+
+  const projected = projectAction(
+    waiting,
+    expired,
+    "o-f3-human"
+  );
+  const later = evaluate(
+    profile,
+    projected,
+    {
+      capacity_observations: [],
+      billing_safety_observations: []
+    },
+    { observed_at: "2026-09-18T19:00:00Z" },
+    transitionTable
+  );
+  assert.equal(later.kind, "NO_OP");
+  assert.notEqual(later.transition_id, "T14");
+});
+
+test("F3 unsupported max-wait modes are schema-invalid instead of dead policy", () => {
+  for (const unsupported of ["BLOCK", "FAIL"]) {
+    const candidate = structuredClone(profile);
+    candidate.execution_routing.policies[0].wait_policy.on_max_wait =
+      unsupported;
+    const errors = validateSchema(candidate, profileSchema);
+    assert.ok(errors.length > 0);
+  }
+});
