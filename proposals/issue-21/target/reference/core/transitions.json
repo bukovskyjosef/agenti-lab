@@ -1,0 +1,504 @@
+{
+  "schema_version": 1,
+  "priority": [
+    "schema_config_validity",
+    "stopped_terminal_guard",
+    "state_version_cas",
+    "accepted_evidence_integrity",
+    "human_release_binding_staleness",
+    "candidate_composite_reconstruction",
+    "assignment_result_currentness",
+    "failed_required_gate",
+    "pending_human_boundary",
+    "corrective_analysis_routing",
+    "review_release_publication_eligibility",
+    "done_parent_rollup",
+    "no_op"
+  ],
+  "transitions": [
+    {
+      "id": "T01",
+      "name": "Intake to A",
+      "from": [
+        "UNMANAGED",
+        "INTAKE"
+      ],
+      "wake": [
+        "INTAKE_CREATED",
+        "RECONCILE"
+      ],
+      "guard": "intake_accepted_and_unassigned",
+      "writes": [
+        "INITIAL_STATE",
+        "LIFECYCLE_ANALYSIS",
+        "ASSIGN_A"
+      ],
+      "assignment": {
+        "role": "A",
+        "purpose": "SHAPE_INTENT"
+      },
+      "idempotence": [
+        "work_item",
+        "contract_digest"
+      ],
+      "next": "A"
+    },
+    {
+      "id": "T02",
+      "name": "A Ready to D",
+      "from": [
+        "ANALYSIS",
+        "BLOCKED"
+      ],
+      "wake": [
+        "ROLE_RESULT",
+        "RECONCILE"
+      ],
+      "guard": "current_A_result_ready_and_dor_passes",
+      "writes": [
+        "LIFECYCLE_READY",
+        "LIFECYCLE_IN_PROGRESS",
+        "ASSIGN_D"
+      ],
+      "assignment": {
+        "role": "D",
+        "purpose": "IMPLEMENT_CURRENT_CONTRACT"
+      },
+      "idempotence": [
+        "contract_digest",
+        "A_result_ref"
+      ],
+      "next": "D"
+    },
+    {
+      "id": "T03",
+      "name": "A to H",
+      "from": [
+        "ANALYSIS"
+      ],
+      "wake": [
+        "ROLE_RESULT"
+      ],
+      "guard": "current_A_result_requires_human",
+      "writes": [
+        "CREATE_HIR",
+        "MAYBE_BLOCK",
+        "CLEAR_ASSIGNMENT"
+      ],
+      "assignment": null,
+      "idempotence": [
+        "request_semantic_key",
+        "context_digest"
+      ],
+      "next": "H"
+    },
+    {
+      "id": "T04",
+      "name": "D candidate checks to R",
+      "from": [
+        "IN_PROGRESS",
+        "CHANGES_REQUIRED",
+        "IN_REVIEW"
+      ],
+      "wake": [
+        "ROLE_RESULT",
+        "CANDIDATE_CHANGED",
+        "CHECKS_CHANGED",
+        "RECONCILE"
+      ],
+      "guard": "current_D_result_candidate_and_checks_pass",
+      "writes": [
+        "BIND_CANDIDATE",
+        "LIFECYCLE_IN_REVIEW",
+        "ASSIGN_R"
+      ],
+      "assignment": {
+        "role": "R",
+        "purpose": "INDEPENDENT_REVIEW"
+      },
+      "idempotence": [
+        "candidate_digest",
+        "required_evidence_digest"
+      ],
+      "next": "R"
+    },
+    {
+      "id": "T05",
+      "name": "R changes required to D",
+      "from": [
+        "IN_REVIEW"
+      ],
+      "wake": [
+        "ROLE_RESULT"
+      ],
+      "guard": "current_R_changes_required_owner_D_and_progress_eligible",
+      "writes": [
+        "LIFECYCLE_CHANGES_REQUIRED",
+        "BIND_FINDINGS",
+        "ASSIGN_D"
+      ],
+      "assignment": {
+        "role": "D",
+        "purpose": "CORRECT_REVIEW_DEFECTS"
+      },
+      "idempotence": [
+        "R_result_digest",
+        "candidate_generation"
+      ],
+      "next": "D"
+    },
+    {
+      "id": "T06",
+      "name": "R contract deficiency to A",
+      "from": [
+        "IN_REVIEW"
+      ],
+      "wake": [
+        "ROLE_RESULT"
+      ],
+      "guard": "current_R_correction_owner_A_no_new_H_choice",
+      "writes": [
+        "LIFECYCLE_ANALYSIS",
+        "ASSIGN_A"
+      ],
+      "assignment": {
+        "role": "A",
+        "purpose": "REPAIR_CONTRACT_FROM_REVIEW"
+      },
+      "idempotence": [
+        "R_result_digest",
+        "contract_digest"
+      ],
+      "next": "A"
+    },
+    {
+      "id": "T07",
+      "name": "R decision required to H",
+      "from": [
+        "IN_REVIEW"
+      ],
+      "wake": [
+        "ROLE_RESULT"
+      ],
+      "guard": "current_R_decision_required",
+      "writes": [
+        "CREATE_HIR",
+        "MAYBE_BLOCK"
+      ],
+      "assignment": null,
+      "idempotence": [
+        "finding_semantic_key",
+        "context_digest"
+      ],
+      "next": "H"
+    },
+    {
+      "id": "T08",
+      "name": "R approved to release gate or P",
+      "from": [
+        "IN_REVIEW",
+        "APPROVED"
+      ],
+      "wake": [
+        "ROLE_RESULT",
+        "CHECKS_CHANGED",
+        "RECONCILE"
+      ],
+      "guard": "current_R_approved_all_gates",
+      "writes": [
+        "LIFECYCLE_APPROVED",
+        "RELEASE_GATE_OR_ASSIGN_P"
+      ],
+      "assignment": {
+        "role": "P",
+        "purpose": "PUBLISH_CURRENT_CANDIDATE"
+      },
+      "idempotence": [
+        "candidate_digest",
+        "target_digest",
+        "gate_digest"
+      ],
+      "next": "H_OR_P"
+    },
+    {
+      "id": "T09",
+      "name": "H release granted to P",
+      "from": [
+        "APPROVED",
+        "BLOCKED"
+      ],
+      "wake": [
+        "H_RELEASE_RESPONSE"
+      ],
+      "guard": "current_release_grant_exact_binding",
+      "writes": [
+        "RELEASE_GRANTED",
+        "ASSIGN_P"
+      ],
+      "assignment": {
+        "role": "P",
+        "purpose": "PUBLISH_CURRENT_CANDIDATE"
+      },
+      "idempotence": [
+        "authorization_id",
+        "accepted_response_binding"
+      ],
+      "next": "P"
+    },
+    {
+      "id": "T10",
+      "name": "Generic H resolution",
+      "from": [
+        "BLOCKED",
+        "ANALYSIS",
+        "IN_PROGRESS",
+        "IN_REVIEW",
+        "APPROVED"
+      ],
+      "wake": [
+        "H_RESPONSE"
+      ],
+      "guard": "current_HIR_resolution_binding_valid",
+      "writes": [
+        "HIR_RESOLVED",
+        "ROUTE_EARLIEST_AFFECTED"
+      ],
+      "assignment": null,
+      "idempotence": [
+        "request_id",
+        "accepted_response_binding"
+      ],
+      "next": "EARLIEST_AFFECTED"
+    },
+    {
+      "id": "T11",
+      "name": "P success",
+      "from": [
+        "APPROVED",
+        "IN_PROGRESS"
+      ],
+      "wake": [
+        "ROLE_RESULT",
+        "PUBLICATION_CHANGED"
+      ],
+      "guard": "current_P_success_exact_candidate_and_checks",
+      "writes": [
+        "BIND_PUBLICATION",
+        "POST_R_OR_DONE_EVAL"
+      ],
+      "assignment": {
+        "role": "R",
+        "purpose": "POST_PUBLICATION_VERIFY"
+      },
+      "idempotence": [
+        "candidate_digest",
+        "published_identity"
+      ],
+      "next": "R_OR_DONE"
+    },
+    {
+      "id": "T12",
+      "name": "Post publication R result",
+      "from": [
+        "IN_REVIEW",
+        "APPROVED"
+      ],
+      "wake": [
+        "ROLE_RESULT"
+      ],
+      "guard": "current_post_publication_R_result",
+      "writes": [
+        "ROUTE_DONE_OR_CORRECTIVE_OR_H"
+      ],
+      "assignment": null,
+      "idempotence": [
+        "R_result_digest",
+        "published_identity"
+      ],
+      "next": "DONE_OR_A_OR_D_OR_H"
+    },
+    {
+      "id": "T13",
+      "name": "Mechanical Done",
+      "from": [
+        "APPROVED",
+        "IN_REVIEW",
+        "IN_PROGRESS"
+      ],
+      "wake": [
+        "COMPLETION_CHANGED",
+        "RECONCILE"
+      ],
+      "guard": "all_objective_success_conditions_true",
+      "writes": [
+        "LIFECYCLE_DONE",
+        "CLEAR_ASSIGNMENT"
+      ],
+      "assignment": null,
+      "idempotence": [
+        "work_item",
+        "completion_digest"
+      ],
+      "next": "NONE"
+    },
+    {
+      "id": "T14",
+      "name": "Transient failure retry",
+      "from": [
+        "ANALYSIS",
+        "IN_PROGRESS",
+        "IN_REVIEW",
+        "APPROVED",
+        "BLOCKED"
+      ],
+      "wake": [
+        "FAILURE",
+        "RECONCILE"
+      ],
+      "guard": "configured_retry_and_objective_progress",
+      "writes": [
+        "BIND_FAILURE",
+        "REASSIGN_SAME_AUTHORITY"
+      ],
+      "assignment": null,
+      "idempotence": [
+        "failure_ref",
+        "retry_context"
+      ],
+      "next": "SAME_OR_A_OR_H"
+    },
+    {
+      "id": "T15",
+      "name": "Blocked",
+      "from": [
+        "INTAKE",
+        "ANALYSIS",
+        "READY",
+        "IN_PROGRESS",
+        "IN_REVIEW",
+        "CHANGES_REQUIRED",
+        "APPROVED"
+      ],
+      "wake": [
+        "BLOCKER_CHANGED",
+        "RECONCILE"
+      ],
+      "guard": "temporarily_impossible_no_independent_work",
+      "writes": [
+        "LIFECYCLE_BLOCKED",
+        "CLEAR_ASSIGNMENT"
+      ],
+      "assignment": null,
+      "idempotence": [
+        "blocker_digest"
+      ],
+      "next": "NONE"
+    },
+    {
+      "id": "T16",
+      "name": "Stopped",
+      "from": [
+        "INTAKE",
+        "ANALYSIS",
+        "BLOCKED",
+        "READY",
+        "IN_PROGRESS",
+        "IN_REVIEW",
+        "CHANGES_REQUIRED",
+        "APPROVED"
+      ],
+      "wake": [
+        "STOP_AUTHORITY",
+        "RECONCILE"
+      ],
+      "guard": "valid_H_stop_or_permitted_lossless_supersession",
+      "writes": [
+        "LIFECYCLE_STOPPED",
+        "BIND_STOP",
+        "CLEAR_ASSIGNMENT"
+      ],
+      "assignment": null,
+      "idempotence": [
+        "stop_record_binding"
+      ],
+      "next": "NONE"
+    },
+    {
+      "id": "T17",
+      "name": "Reopen",
+      "from": [
+        "STOPPED"
+      ],
+      "wake": [
+        "REOPEN_AUTHORITY"
+      ],
+      "guard": "valid_current_H_reopen",
+      "writes": [
+        "CLEAR_TERMINAL_GUARD",
+        "ROUTE_EARLIEST_AFFECTED"
+      ],
+      "assignment": null,
+      "idempotence": [
+        "reopen_record_binding",
+        "current_fact_digest"
+      ],
+      "next": "EARLIEST_AFFECTED"
+    },
+    {
+      "id": "T18",
+      "name": "Parent Intent roll-up",
+      "from": [
+        "INTAKE",
+        "ANALYSIS",
+        "BLOCKED",
+        "READY"
+      ],
+      "wake": [
+        "CHILD_COMPLETION_CHANGED",
+        "PARENT_CONDITION_CHANGED",
+        "RECONCILE"
+      ],
+      "guard": "parent_condition_mechanically_evaluable",
+      "writes": [
+        "MAYBE_PARENT_DONE"
+      ],
+      "assignment": null,
+      "idempotence": [
+        "parent_issue",
+        "child_set_digest",
+        "completion_condition_digest"
+      ],
+      "next": "NONE_OR_A_OR_H"
+    },
+    {
+      "id": "T19",
+      "name": "Multi-repo composite rebind",
+      "from": [
+        "IN_PROGRESS",
+        "IN_REVIEW",
+        "APPROVED",
+        "BLOCKED"
+      ],
+      "wake": [
+        "CANDIDATE_CHANGED",
+        "CHECKS_CHANGED",
+        "REVIEW_CHANGED",
+        "MEMBERSHIP_CHANGED",
+        "CONTRACT_CHANGED",
+        "RECONCILE"
+      ],
+      "guard": "multi_repo_binding_reconstructable",
+      "writes": [
+        "REBIND_COMPOSITE",
+        "INVALIDATE_DEPENDENT_GATES_ONLY"
+      ],
+      "assignment": null,
+      "idempotence": [
+        "membership_digest",
+        "candidate_map_digest",
+        "local_evidence_digest"
+      ],
+      "next": "EARLIEST_DEPENDENT_GATE"
+    }
+  ]
+}
