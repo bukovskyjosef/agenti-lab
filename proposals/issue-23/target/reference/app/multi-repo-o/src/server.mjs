@@ -49,7 +49,8 @@ const orchestrator = new MultiRepoOrchestrator({
   core,
   transitionTable,
   store,
-  trustedResultActorIds: config.trustedResultActorIds
+  trustedResultActorIds: config.trustedResultActorIds,
+  trustedStateAppId: config.appId
 });
 
 let workerActive = false;
