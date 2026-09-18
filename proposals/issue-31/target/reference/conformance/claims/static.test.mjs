@@ -106,3 +106,20 @@ test("single-repo runner fresh-reconstructs before claim and before provider", a
   assert.match(body, /CANDIDATE_HEAD_DRIFT_BEFORE_CLAIM/);
   assert.match(body, /RELEASE_AUTHORIZATION_NOT_CURRENT/);
 });
+
+test("all single-repo authoritative writers revalidate the claim target", async () => {
+  const runnerBody = await runtime("runner.mjs");
+  const dBody = await runtime("candidate-writer.mjs");
+  const pBody = await runtime("publish.mjs");
+
+  assert.match(runnerBody, /WRITER_CURRENTNESS_FAILED/);
+  assert.match(runnerBody, /WRITER_TARGET_BINDING_DRIFT/);
+
+  assert.match(dBody, /preClaimCurrentness/);
+  assert.match(dBody, /D_WRITE_TARGET_BINDING_DRIFT/);
+  assert.match(dBody, /target_binding\?\.base_sha/);
+
+  assert.match(pBody, /preClaimCurrentness/);
+  assert.match(pBody, /P_WRITE_TARGET_BINDING_DRIFT/);
+  assert.match(pBody, /claim_target_digest/);
+});
