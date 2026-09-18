@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "adapter_id": "claude-code-action",
+  "adapter_version": "1",
+  "source": {
+    "repository": "anthropics/claude-code-action",
+    "exact_ref": "a4f54ef2c58884867281bd8e2f8d63352ad019a9"
+  },
+  "authentication": {
+    "included_allowance_credential": "CLAUDE_CODE_OAUTH_TOKEN",
+    "forbidden_paid_credential": "ANTHROPIC_API_KEY",
+    "stock_oauth_hard_no_spend_guarantee": false
+  },
+  "billing_safety": {
+    "unattended_forbidden_paid_policy_requires": "VERIFIED_NO_PAID_SPILLOVER",
+    "credential_presence_alone_is_insufficient": true
+  },
+  "capacity": {
+    "preflight": "UNKNOWN",
+    "exhaustion_source": "EXECUTION_OUTCOME"
+  },
+  "roles": {
+    "A": {
+      "workspace": "read-only",
+      "fresh_execution_required": false
+    },
+    "D": {
+      "workspace": "write",
+      "fresh_execution_required": false
+    },
+    "R": {
+      "workspace": "read-only",
+      "fresh_execution_required": true,
+      "resume_forbidden": true
+    }
+  }
+}
