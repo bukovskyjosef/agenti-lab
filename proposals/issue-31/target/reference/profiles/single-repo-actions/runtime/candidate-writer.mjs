@@ -3,7 +3,9 @@ import { readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import {
   candidateDigest,
+  materialOperationId,
   normalizeRoleResult,
+  verifyActiveClaim,
   validateSchema
 } from "../core/index.mjs";
 import { githubClientFromEnv } from "./github.mjs";
@@ -69,6 +71,15 @@ export async function writeCandidate({
   proposal.payload.requested_branch_key = deterministicBranch(issueNumber);
 
   const runContext = JSON.parse(await readFile(contextPath, "utf8"));
+  const claimGrant = runContext.claim_grant;
+  const claimCheck = verifyActiveClaim({
+    state,
+    assignmentId: assignment.assignment_id,
+    claimId: claimGrant?.claim_id,
+    claimGeneration: claimGrant?.claim_generation,
+    executionInstanceId: runContext.attestation?.execution_instance_id
+  });
+  if (!claimCheck.valid) throw new Error("D_WRITE_CLAIM_NOT_CURRENT: " + claimCheck.reason);
   const patchBytes = await readFile(patchPath);
   if (patchBytes.length === 0) throw new Error("D produced no change artifact");
 
@@ -76,6 +87,14 @@ export async function writeCandidate({
   const baseRef = assignment.candidate.kind === "single" && assignment.candidate.members[0]?.head_sha
     ? assignment.candidate.members[0].head_sha
     : runtime.runtimeConfig.default_branch;
+  const materialOperation = materialOperationId({
+    state,
+    claimId: claimGrant.claim_id,
+    claimGeneration: claimGrant.claim_generation,
+    assignmentId: assignment.assignment_id,
+    operationKind: "D_CANDIDATE_REF_WRITE",
+    targetBinding: { branch, base_ref: baseRef, patch_sha256: sha256File(patchBytes) }
+  });
 
   sh("git", ["fetch", "--no-tags", "origin", baseRef]);
   sh("git", ["checkout", "-B", branch, baseRef]);
@@ -130,6 +149,8 @@ export async function writeCandidate({
     proposal,
     trustedFacts: {
       assignment_id: assignment.assignment_id,
+      claim_id: claimGrant.claim_id,
+      claim_generation: claimGrant.claim_generation,
       observed_state_version: assignment.state.version,
       observed_fingerprint: assignment.state.fingerprint,
       execution_attestation: runContext.attestation,
@@ -153,7 +174,7 @@ export async function writeCandidate({
   );
   await callback(github, runtime.runtimeConfig, issueNumber, assignmentId, resultComment.id);
 
-  return { pull, candidate, normalized, resultComment };
+  return { pull, candidate, normalized, resultComment, material_operation_id: materialOperation };
 }
 
 async function main() {
