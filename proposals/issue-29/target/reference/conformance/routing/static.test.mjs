@@ -49,6 +49,14 @@ test("Claude subscription workflows are exact-pinned and fail closed on paid Ant
       body,
       /ANTHROPIC_API_KEY is forbidden for claude-subscription route/
     );
+    assert.doesNotMatch(
+      body,
+      /\}\}\s+"\$GITHUB_OUTPUT"/
+    );
+    assert.match(
+      body,
+      />>\s+"\$GITHUB_OUTPUT"/
+    );
   }
 });
 
