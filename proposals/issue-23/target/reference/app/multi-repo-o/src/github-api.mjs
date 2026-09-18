@@ -77,7 +77,9 @@ export class GitHubApi {
   }
   async workflowDispatch(repository, workflow, ref, inputs) {
     return this.client.request(repository, this.repoPath(repository, `/actions/workflows/${encodeURIComponent(workflow)}/dispatches`), {
-      method: "POST", body: { ref, inputs }, permissions: { actions: "write" }
+      method: "POST",
+      body: { ref, inputs, return_run_details: true },
+      permissions: { actions: "write" }
     });
   }
 }
