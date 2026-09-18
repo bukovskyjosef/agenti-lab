@@ -623,7 +623,7 @@ async function buildSnapshot(github, runtime, state, issue, comments) {
         target_digest: state.release_authorization.target_digest,
         gate_digest: state.release_authorization.gate_digest,
         context_digest: state.release_authorization.context_digest,
-        response_binding,
+        response_binding: responseBinding,
         current_response: current
       };
       snapshot.required_gates_current = (await checkSnapshot(github, runtime.projectProfile, state.candidate)).required_gates_current;
