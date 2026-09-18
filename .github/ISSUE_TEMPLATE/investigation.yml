@@ -3,6 +3,15 @@ description: Investigate evidence, a workflow problem, adoption experience or hy
 title: "[INVESTIGATION] "
 body:
   - type: textarea
+    id: concurrency
+    attributes:
+      label: Concurrency
+      description: Keep SERIAL unless K has freshly authorized this work item pair and durably updated both Issues to PARALLEL-SAFE with #N. A/E/R/P must not self-authorize parallelism.
+      value: "SERIAL"
+    validations:
+      required: true
+
+  - type: textarea
     id: question
     attributes:
       label: Question / observed problem
