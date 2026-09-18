@@ -41,7 +41,7 @@ It byte-materializes the three immutable approved dependency trees above, applie
 ### Corrected T14 execution retry
 T14 remains T14 and never creates role authority.
 
-For a trusted current execution/capacity failure it:
+For a trusted current execution/capacity failure, including accepted routing-recoverable `UNAVAILABLE`, it:
 - marks the failed assignment `FAILED_BEFORE_RESULT`;
 - increments routing attempt generation exactly once;
 - emits a fresh assignment for the **same role/purpose** when an eligible route exists;
@@ -51,15 +51,18 @@ For a trusted current execution/capacity failure it:
 
 No new lifecycle state exists. Existing `BLOCKED` is reused only when no independent authorized work can proceed.
 
+Routing wait is now actually bounded: when `max_wait_deadline` is reached, the supported `on_max_wait: HUMAN` mode transitions through existing T15/H boundary semantics and clears the wait. Previously declared but unimplemented BLOCK/FAIL modes were removed from the schema instead of remaining dead policy.
+
 ### Billing safety
 Credential availability never creates spend authority.
 
-For `INCLUDED_ALLOWANCE + FORBIDDEN`:
+For every `INCLUDED_ALLOWANCE` route:
 - technical isolation or trusted current `VERIFIED_NO_PAID_SPILLOVER` evidence is required;
 - `UNKNOWN`/possible spillover is ineligible;
-- OAuth token presence and API-key absence alone are insufficient.
+- `incremental_paid_usage: true` is invalid;
+- switching policy to `ALLOWED_WITH_BUDGET` does not bypass the no-spillover gate.
 
-Paid/prepaid candidates require explicit `ALLOWED_WITH_BUDGET` and enforceable hard budget.
+Any paid overflow must be a separate PREPAID/METERED candidate. `ALLOWED_WITH_BUDGET` requires an explicit budget/enforcement declaration and every reachable paid candidate requires an enforceable hard limit.
 
 ### Single-repo Actions profile
 - cost-min routed A/D/R selection;
