@@ -31,6 +31,9 @@ import {
   recoverManualHumanState,
   recoverPlatformRunState
 } from "./recovery.mjs";
+import {
+  reconcileMaterialOperationForFailedRun
+} from "./material-operation.mjs";
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, "utf8"));
@@ -1047,6 +1050,23 @@ export async function processIssue(issueNumber) {
   for (let iteration = 0; iteration < 6; iteration += 1) {
     const issue = await github.getIssue(issueNumber);
     const loaded = await loadState(github, issueNumber, runtime.workflowStateSchema);
+
+    const materialRecovery =
+      await reconcileMaterialOperationForFailedRun({
+        github,
+        runtime,
+        loaded,
+        issueNumber
+      });
+    if (materialRecovery?.blocked) {
+      return {
+        status: materialRecovery.status,
+        material_operation: materialRecovery.material_operation
+      };
+    }
+    if (materialRecovery?.changed) {
+      continue;
+    }
 
     const recovery = await recoverActiveClaimIfAuthorized({
       github,
