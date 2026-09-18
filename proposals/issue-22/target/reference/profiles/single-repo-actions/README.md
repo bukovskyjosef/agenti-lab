@@ -27,7 +27,7 @@ node .agenti-runtime/agenti.mjs setup-github --target .
 node .agenti-runtime/agenti.mjs doctor --target . --github
 ```
 
-`setup-github` creates/updates only the Agenti labels and repository variables it owns. It sets `AGENTI_TEST_MODE=false`, configures `AGENTI_CODEX_SECRET_NAME`, checks only secret metadata, and never prints secret values.
+`setup-github` creates/updates only the Agenti labels and repository variables it owns. It sets `AGENTI_TEST_MODE=false`, checks only `OPENAI_API_KEY` secret metadata and never prints secret values.
 
 ## Runtime authority
 
