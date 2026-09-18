@@ -340,6 +340,58 @@ function workItem() {
   };
 }
 
+function assignmentEnvelopeForState(state, projectProfile, issuedAt) {
+  const a = state.assignment;
+  return {
+    schema_version: 1,
+    assignment_id: a.assignment_id,
+    issued_at: issuedAt,
+    role: a.role,
+    purpose: a.purpose,
+    work_item: {
+      control_repository: state.work_item.control_repository,
+      issue_number: state.work_item.issue_number
+    },
+    execution_repository: null,
+    state: {
+      version: a.bound_state_version,
+      fingerprint: a.fingerprint,
+      contract_digest: state.contract.digest
+    },
+    candidate: {
+      kind: state.candidate.kind,
+      digest: state.candidate.digest,
+      members: state.candidate.members
+    },
+    context_entrypoints: [
+      {
+        kind: "work_item",
+        ref: `${state.work_item.control_repository}#${state.work_item.issue_number}`
+      },
+      { kind: "project_profile", ref: ".agenti/project-profile.json" },
+      { kind: "agent_entrypoint", ref: "AGENTS.md" },
+      ...(state.candidate?.members ?? []).map((member) => ({
+        kind: "candidate",
+        ref: `${member.repository}#${member.pr_number}@${member.head_sha}`
+      }))
+    ],
+    capability_profile: a.capability_profile,
+    independence: {
+      required: a.role === "R",
+      must_differ_from_execution_instances:
+        a.must_differ_from_execution_instances ?? [],
+      enforcement_mechanism: a.role === "R"
+        ? projectProfile.role_runners.R.independence_mechanism
+        : "none"
+    },
+    completion: {
+      result_schema_version: 1,
+      result_marker: "agenti-role-result:v1",
+      callback_event: "agenti.role-result"
+    }
+  };
+}
+
 test("F1 durable run claim survives total operational DB loss and rejects a second expensive run owner", async () => {
   const issue = {
     number: 42,
@@ -432,6 +484,129 @@ test("F1 durable run claim survives total operational DB loss and rejects a seco
   );
 
   freshStore.close();
+});
+
+test("F1 concurrent receiver preflights serialize from the same unclaimed GitHub state after DB recreation", async () => {
+  const issue = {
+    number: 42,
+    title: "Concurrent receiver claim",
+    body: "Stable contract",
+    updated_at: "2026-09-18T12:00:00Z",
+    labels: [{ name: "agenti:managed" }]
+  };
+  const projectProfile = profile();
+  const state = baseState({
+    issue,
+    role: "A",
+    lifecycle: "ANALYSIS",
+    version: 4
+  });
+  const assignment = assignmentEnvelopeForState(
+    state,
+    projectProfile,
+    "2026-09-18T12:00:00Z"
+  );
+  const gh = fakeGitHub({
+    issue,
+    state,
+    runIds: []
+  });
+
+  gh.addRun({
+    repository: "acme/control",
+    workflow: "a.yml",
+    runId: 9301
+  });
+  gh.addRun({
+    repository: "acme/control",
+    workflow: "a.yml",
+    runId: 9302
+  });
+
+  // Simulate complete loss of the prior operational database. The recreated
+  // store starts empty, while GitHub still contains the same unclaimed
+  // authoritative assignment.
+  const lostStore = new OperationalStore(":memory:");
+  lostStore.beginEffect({
+    effectKey: `dispatch:${assignment.assignment_id}`,
+    kind: "workflow_dispatch"
+  });
+  lostStore.close();
+
+  const recreatedStore = new OperationalStore(":memory:");
+  assert.deepEqual(recreatedStore.counts(), []);
+  const restartedO = orchestrator({
+    gh,
+    store: recreatedStore,
+    projectProfile
+  });
+
+  // Promise evaluation starts receiver 9301 until its first await; it has
+  // already acquired the per-work-item claim mutex. Receiver 9302 therefore
+  // races against the same unclaimed GitHub projection while 9301 still owns
+  // the critical section.
+  const [first, second] = await Promise.all([
+    restartedO.verifyAssignment(
+      assignment,
+      "acme/control",
+      "9301",
+      "1"
+    ),
+    restartedO.verifyAssignment(
+      assignment,
+      "acme/control",
+      "9302",
+      "1"
+    )
+  ]);
+
+  const results = [first, second];
+  const winners = results.filter((result) => result.valid);
+  const losers = results.filter((result) => !result.valid);
+
+  assert.equal(winners.length, 1);
+  assert.equal(losers.length, 1);
+  assert.equal(
+    losers[0].reason,
+    "ASSIGNMENT_RUN_CLAIM_CONFLICT"
+  );
+
+  const winnerRunId = String(winners[0].workflow_run_id);
+  assert.ok(["9301", "9302"].includes(winnerRunId));
+  assert.equal(
+    String(gh.currentState().assignment.workflow_run_id),
+    winnerRunId
+  );
+  assert.equal(
+    gh.currentState().assignment.dispatch_status,
+    "running"
+  );
+  assert.equal(
+    gh.currentState().run_receipts[assignment.assignment_id]
+      .execution_instance_id,
+    `github-actions:acme/control:${winnerRunId}:1`
+  );
+
+  // A later retry by the losing run observes the durable GitHub owner and
+  // still cannot obtain provider-work authority after the mutex is released.
+  const losingRunId = winnerRunId === "9301" ? "9302" : "9301";
+  const losingRetry = await restartedO.verifyAssignment(
+    assignment,
+    "acme/control",
+    losingRunId,
+    "1"
+  );
+  assert.equal(losingRetry.valid, false);
+  assert.equal(
+    losingRetry.reason,
+    "ASSIGNMENT_RUN_OWNERSHIP_CONFLICT"
+  );
+  assert.equal(
+    String(losingRetry.workflow_run_id),
+    winnerRunId
+  );
+
+  recreatedStore.close();
 });
 
 test("F2 contract drift projects ANALYSIS + canonical A assignment and converges on next reconcile", async () => {
