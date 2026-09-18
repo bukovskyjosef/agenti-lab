@@ -342,3 +342,45 @@ test("separate child work items can hold independent claims", () => {
     stateMutationKey(childB.work_item)
   );
 });
+
+test("claim eligibility fails closed at Human, stale assignment and P release boundaries", () => {
+  const human = state();
+  human.human_requests = {
+    active: [{ request_id: "hir-1", status: "PENDING" }],
+    recent_refs: []
+  };
+  assert.equal(
+    acquireClaimCAS({
+      state: human,
+      request: request(human),
+      acquiredAt: "2026-09-18T20:00:00Z"
+    }).reason,
+    "HUMAN_INPUT_PENDING"
+  );
+
+  const stale = state();
+  stale.assignment.bound_state_version = stale.state_version - 1;
+  assert.equal(
+    acquireClaimCAS({
+      state: stale,
+      request: request(stale),
+      acquiredAt: "2026-09-18T20:00:00Z"
+    }).reason,
+    "ASSIGNMENT_STATE_BINDING_STALE"
+  );
+
+  const publisher = state("P");
+  publisher.assignment.purpose = "PUBLISH_CURRENT_CANDIDATE";
+  publisher.release_authorization = { status: "PENDING" };
+  const pRequest = request(publisher, "exec-p");
+  pRequest.role = "P";
+  pRequest.purpose = "PUBLISH_CURRENT_CANDIDATE";
+  assert.equal(
+    acquireClaimCAS({
+      state: publisher,
+      request: pRequest,
+      acquiredAt: "2026-09-18T20:00:00Z"
+    }).reason,
+    "RELEASE_AUTHORIZATION_NOT_CURRENT"
+  );
+});
