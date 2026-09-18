@@ -108,3 +108,29 @@ The installed profile defaults to repository variable:
 When explicitly set to `true`, A/D/R workflows use the bundled deterministic fake runner instead of Codex. This is only for conformance/E2E. The fake runner also refuses execution unless `AGENTI_TEST_MODE=true` is present in its process environment.
 
 Real provider smoke must run with test mode off and with the exact selected route's required credential/safety evidence.
+
+
+## Exclusive run claim
+
+An explicit assignment is necessary but is no longer sufficient for material A/D/R/P execution. The deterministic preflight acquires the current work item's exclusive claim in the authoritative `agenti-state:v1` projection before provider work starts.
+
+Claim bookkeeping has its own monotonic `claim_version`; it does not increment semantic `state_version` or change Child #5 `semantic_work_digest`.
+
+All state/claim/material-writer jobs share:
+
+```text
+agenti-state-${{ github.repository_id }}-${{ inputs.issue_number }}
+```
+
+with queued non-cancelling serialization. Provider/model compute runs outside that group. All role jobs have bounded `timeout-minutes`.
+
+When a bound Actions run reaches authoritative terminal non-success and no applicable result/material operation exists, periodic reconcile may CAS-terminalize that exact PLATFORM_RUN claim and redispatch the same still-current assignment. A successful run with no result is not guessed stale.
+
+For a `NONE` recovery profile, only a configured Human principal may recover the exact current claim:
+
+```text
+/agenti claim recover <claim-id>
+<reason>
+```
+
+The command never steals a different or superseded claim.
