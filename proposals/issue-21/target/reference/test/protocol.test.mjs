@@ -9,7 +9,9 @@ import {
   normalizeRoleResult,
   applyRoleResult,
   verifyExecutionIndependence,
-  validateSchema
+  validateSchema,
+  evaluate,
+  projectAction
 } from "../core/index.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -57,6 +59,7 @@ function reviewerAssignment(authorInstance = "exec-author-1") {
     role: "R",
     purpose: assignment.purpose,
     issued_from_state_version: state.state_version,
+    bound_state_version: assignment.state.version,
     fingerprint: assignment.state.fingerprint,
     capability_profile: assignment.capability_profile,
     dispatch_status: "running",
@@ -233,6 +236,156 @@ test("R APPROVED cannot carry blocking finding or correction owner", () => {
   );
 });
 
+
+test("F1 round-trip: T02 assignment binds post-transition N+1 and legitimate D result is accepted", async () => {
+  const transitionTable = await readJson("core/transitions.json");
+  const state = structuredClone(baseState);
+  const aResult = {
+    role: "A",
+    status: "COMPLETED",
+    result_digest: digest({ result: "ready-for-d" }),
+    payload: { disposition: "READY" }
+  };
+
+  const action = evaluate(
+    profile,
+    state,
+    {
+      role_result: aResult,
+      dor_passes: true,
+      pending_human_request: false,
+      context_entrypoints: [{ kind: "work_item", ref: "example/product#42" }]
+    },
+    { observed_at: "2026-09-18T10:30:00Z" },
+    transitionTable
+  );
+
+  assert.equal(action.transition_id, "T02");
+  assert.equal(action.assignment.state.version, state.state_version + 1);
+
+  const projected = projectAction(state, action, "o-run-f1");
+  assert.equal(projected.state_version, 4);
+  assert.equal(projected.assignment.issued_from_state_version, 3);
+  assert.equal(projected.assignment.bound_state_version, 4);
+  assert.equal(projected.assignment.fingerprint, action.assignment.state.fingerprint);
+
+  const proposal = {
+    role: "D",
+    status: "COMPLETED",
+    result_type: "DEVELOPER",
+    evidence_refs: [],
+    human_request: null,
+    retry_or_failure: null,
+    payload: {
+      work_contract_digest: projected.contract.digest,
+      base: { repository: "example/product", ref_or_sha: "main" },
+      change_artifact: {
+        format: "unified-diff",
+        artifact_ref: "model:ignored",
+        sha256: digest({ ignored: true })
+      },
+      requested_branch_key: "issue-42",
+      author_validation: { refs: [], summary: "ok" },
+      blockers: []
+    }
+  };
+
+  const wrapperArtifact = {
+    format: "unified-diff",
+    artifact_ref: "wrapper:f1-roundtrip",
+    sha256: digest({ artifact: "f1-roundtrip" })
+  };
+
+  const normalized = normalizeRoleResult({
+    proposal,
+    trustedFacts: {
+      assignment_id: action.assignment.assignment_id,
+      observed_state_version: action.assignment.state.version,
+      observed_fingerprint: action.assignment.state.fingerprint,
+      execution_attestation: {
+        adapter_id: "fake",
+        adapter_version: "1",
+        execution_instance_id: "exec-d-f1",
+        platform_run: {
+          provider: "github-actions",
+          run_id: "301",
+          run_attempt: 1,
+          job_or_worker_id: "developer"
+        },
+        provider_session: { mode: "fresh", provider_session_id: null },
+        issued_for_assignment: action.assignment.assignment_id,
+        attested_by: "deterministic-wrapper"
+      },
+      candidate: null,
+      change_artifact: wrapperArtifact,
+      author_validation_refs: []
+    },
+    assignment: action.assignment,
+    roleResultSchema
+  });
+
+  assert.deepEqual(
+    applyRoleResult({
+      state: projected,
+      assignment: action.assignment,
+      normalizedResult: normalized,
+      projectProfile: profile
+    }),
+    {
+      accepted: true,
+      reason: "CURRENT_SCHEMA_VALID_RESULT",
+      routing_proposal: {
+        role: "D",
+        status: "COMPLETED",
+        result_type: "DEVELOPER",
+        payload: normalized.payload,
+        trusted_candidate: null,
+        result_digest: normalized.result_digest
+      }
+    }
+  );
+
+  const stale = structuredClone(normalized);
+  stale.trusted.observed_state_version = state.state_version;
+  assert.deepEqual(
+    applyRoleResult({
+      state: projected,
+      assignment: action.assignment,
+      normalizedResult: stale,
+      projectProfile: profile
+    }),
+    { accepted: false, reason: "STALE_STATE_OR_FINGERPRINT" }
+  );
+});
+
+test("F1 generic guard rejects an assignment that is not bound to transition N+1", async () => {
+  const transitionTable = await readJson("core/transitions.json");
+  const state = structuredClone(baseState);
+  const action = evaluate(
+    profile,
+    state,
+    {
+      role_result: {
+        role: "A",
+        status: "COMPLETED",
+        result_digest: digest({ result: "ready" }),
+        payload: { disposition: "READY" }
+      },
+      dor_passes: true,
+      pending_human_request: false
+    },
+    { observed_at: "2026-09-18T10:31:00Z" },
+    transitionTable
+  );
+
+  const invalid = structuredClone(action);
+  invalid.assignment.state.version = state.state_version;
+
+  assert.throws(
+    () => projectAction(state, invalid, "o-run-invalid-binding"),
+    /post-transition projection version/
+  );
+});
 
 test("D change artifact is injected by deterministic wrapper, not trusted from model", () => {
   const state = structuredClone(baseState);
