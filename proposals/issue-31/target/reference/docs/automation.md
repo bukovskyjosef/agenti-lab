@@ -23,4 +23,6 @@ PLATFORM_RUN recovery requires authoritative GitHub Actions terminal non-success
 
 The single-node reference uses one non-expiring in-process FIFO work-item fence for O/claim/failure/recovery/material prepare/resolve while GitHub remains authority. Expiring SQLite leases are operational queue/retry aids only. Declared multi-instance use with that process-local domain is rejected.
 
-Remote material writers use PREPARED/RESOLVE control-projection fencing; they do not rely on a precheck-only verification.
+App dispatch envelopes carry a freshly derived role-specific claim target digest. Receiver preflight re-derives and revalidates that target before and immediately after claim grant; an initial D run therefore cannot start against a moved implementation default/base SHA.
+
+Remote material writers use PREPARED/RESOLVE control-projection fencing; they do not rely on a precheck-only verification. Single-repo Actions D/P writers likewise persist PREPARED before push/merge and resolve the sink afterward. A failed run with missing semantic result must reconstruct the exact sink outcome before claim recovery; applied or ambiguous outcomes require Human reconciliation instead of blind redispatch.
