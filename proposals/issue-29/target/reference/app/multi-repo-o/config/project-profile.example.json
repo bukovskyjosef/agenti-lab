@@ -1,0 +1,391 @@
+{
+  "schema_version": 1,
+  "runtime_version": "0.1.0-child1",
+  "repository_topology": "multi-repo",
+  "control_repository": "acme/control",
+  "implementation_repositories": [
+    "acme/service-a",
+    "acme/service-b"
+  ],
+  "human": {
+    "principals": [
+      {
+        "actor_id": 123456,
+        "login": "product-owner"
+      }
+    ]
+  },
+  "semantic_authority_map": [
+    {
+      "fact_domain": "product-contract",
+      "source_ref": "issue-body",
+      "currentness": "current"
+    }
+  ],
+  "required_checks": [
+    "unit"
+  ],
+  "role_runners": {
+    "A": {
+      "adapter_id": "github-workflow://acme/control/agenti-role-a.yml",
+      "adapter_version": "1",
+      "capability_profile": "A_READ_ANALYZE"
+    },
+    "D": {
+      "adapter_id": "github-workflow://acme/service-a/agenti-role-d.yml",
+      "adapter_version": "1",
+      "capability_profile": "D_WORKSPACE_WRITE"
+    },
+    "R": {
+      "adapter_id": "github-workflow://acme/service-b/agenti-role-r.yml",
+      "adapter_version": "1",
+      "capability_profile": "R_READ_REVIEW",
+      "independence_mechanism": "fresh-wrapper"
+    },
+    "P": {
+      "adapter_id": "github-workflow://acme/control/agenti-publish.yml",
+      "adapter_version": "1",
+      "capability_profile": "P_PUBLISH"
+    }
+  },
+  "independent_r_enforcement": {
+    "mechanisms": {
+      "fresh-wrapper": {
+        "attestation_source": "deterministic-wrapper",
+        "fresh_execution_required": true,
+        "trusted_platform_fields": [
+          "run_id",
+          "run_attempt"
+        ]
+      }
+    }
+  },
+  "identities": {
+    "O": {
+      "identity_id": "o-github-app",
+      "capability_profile": "O_CONTROL_PLANE",
+      "dispatch_mechanism": "workflow_dispatch",
+      "permissions": {
+        "metadata": "read",
+        "contents": "read",
+        "issues": "write",
+        "pull_requests": "read",
+        "checks": "read",
+        "actions": "write",
+        "deployments": "read"
+      }
+    },
+    "P": {
+      "identity_id": "p-publisher",
+      "capability_profile": "P_PUBLISH",
+      "dispatch_mechanism": "none",
+      "permissions": {
+        "metadata": "read",
+        "contents": "write",
+        "issues": "read",
+        "pull_requests": "write",
+        "checks": "read",
+        "actions": "read",
+        "deployments": "write"
+      }
+    }
+  },
+  "release_authorization": {
+    "required": true,
+    "target": "production"
+  },
+  "publication": {
+    "boundary_operations": [
+      "MERGE",
+      "DEPLOY"
+    ]
+  },
+  "state_projection": {
+    "marker": "agenti-state:v1",
+    "single_writer": "O"
+  },
+  "execution_routing": {
+    "runner_catalog": {
+      "claude-a": {
+        "adapter_id": "claude-code-action",
+        "adapter_version": "1",
+        "provider_ref": "anthropic",
+        "capability_profiles": [
+          "A_READ_ANALYZE"
+        ],
+        "execution_kind": "AI",
+        "authentication_profile": "claude-pro-max-oauth",
+        "billing": {
+          "mode": "INCLUDED_ALLOWANCE",
+          "incremental_paid_usage": false
+        },
+        "billing_safety": {
+          "mode": "OBSERVATION_REQUIRED",
+          "required_status": "VERIFIED_NO_PAID_SPILLOVER"
+        },
+        "capacity": {
+          "observation_mode": "EXECUTION_OUTCOME"
+        },
+        "dispatch": {
+          "kind": "GITHUB_WORKFLOW",
+          "repository": "acme/control",
+          "workflow": "agenti-role-a-claude.yml"
+        }
+      },
+      "claude-d": {
+        "adapter_id": "claude-code-action",
+        "adapter_version": "1",
+        "provider_ref": "anthropic",
+        "capability_profiles": [
+          "D_WORKSPACE_WRITE"
+        ],
+        "execution_kind": "AI",
+        "authentication_profile": "claude-pro-max-oauth",
+        "billing": {
+          "mode": "INCLUDED_ALLOWANCE",
+          "incremental_paid_usage": false
+        },
+        "billing_safety": {
+          "mode": "OBSERVATION_REQUIRED",
+          "required_status": "VERIFIED_NO_PAID_SPILLOVER"
+        },
+        "capacity": {
+          "observation_mode": "EXECUTION_OUTCOME"
+        },
+        "dispatch": {
+          "kind": "GITHUB_WORKFLOW",
+          "repository": "acme/service-a",
+          "workflow": "agenti-role-d-claude.yml"
+        }
+      },
+      "claude-r": {
+        "adapter_id": "claude-code-action",
+        "adapter_version": "1",
+        "provider_ref": "anthropic",
+        "capability_profiles": [
+          "R_READ_REVIEW"
+        ],
+        "execution_kind": "AI",
+        "authentication_profile": "claude-pro-max-oauth",
+        "independence_mechanism": "fresh-wrapper",
+        "billing": {
+          "mode": "INCLUDED_ALLOWANCE",
+          "incremental_paid_usage": false
+        },
+        "billing_safety": {
+          "mode": "OBSERVATION_REQUIRED",
+          "required_status": "VERIFIED_NO_PAID_SPILLOVER"
+        },
+        "capacity": {
+          "observation_mode": "EXECUTION_OUTCOME"
+        },
+        "dispatch": {
+          "kind": "GITHUB_WORKFLOW",
+          "repository": "acme/service-b",
+          "workflow": "agenti-role-r-claude.yml"
+        }
+      },
+      "codex-a-optional": {
+        "adapter_id": "codex-action",
+        "adapter_version": "1",
+        "provider_ref": "openai",
+        "capability_profiles": [
+          "A_READ_ANALYZE"
+        ],
+        "execution_kind": "AI",
+        "authentication_profile": "openai-api-key",
+        "billing": {
+          "mode": "METERED",
+          "incremental_paid_usage": true
+        },
+        "budget_enforcement": {
+          "hard_limit": false,
+          "mechanism": "not-configured"
+        },
+        "capacity": {
+          "observation_mode": "ADAPTER_PREFLIGHT"
+        },
+        "dispatch": {
+          "kind": "GITHUB_WORKFLOW",
+          "repository": "acme/control",
+          "workflow": "agenti-role-a.yml"
+        }
+      },
+      "codex-d-optional": {
+        "adapter_id": "codex-action",
+        "adapter_version": "1",
+        "provider_ref": "openai",
+        "capability_profiles": [
+          "D_WORKSPACE_WRITE"
+        ],
+        "execution_kind": "AI",
+        "authentication_profile": "openai-api-key",
+        "billing": {
+          "mode": "METERED",
+          "incremental_paid_usage": true
+        },
+        "budget_enforcement": {
+          "hard_limit": false,
+          "mechanism": "not-configured"
+        },
+        "capacity": {
+          "observation_mode": "ADAPTER_PREFLIGHT"
+        },
+        "dispatch": {
+          "kind": "GITHUB_WORKFLOW",
+          "repository": "acme/service-a",
+          "workflow": "agenti-role-d.yml"
+        }
+      },
+      "codex-r-optional": {
+        "adapter_id": "codex-action",
+        "adapter_version": "1",
+        "provider_ref": "openai",
+        "capability_profiles": [
+          "R_READ_REVIEW"
+        ],
+        "execution_kind": "AI",
+        "authentication_profile": "openai-api-key",
+        "independence_mechanism": "fresh-wrapper",
+        "billing": {
+          "mode": "METERED",
+          "incremental_paid_usage": true
+        },
+        "budget_enforcement": {
+          "hard_limit": false,
+          "mechanism": "not-configured"
+        },
+        "capacity": {
+          "observation_mode": "ADAPTER_PREFLIGHT"
+        },
+        "dispatch": {
+          "kind": "GITHUB_WORKFLOW",
+          "repository": "acme/service-b",
+          "workflow": "agenti-role-r.yml"
+        }
+      },
+      "deterministic-p": {
+        "adapter_id": "deterministic-publisher",
+        "adapter_version": "1",
+        "provider_ref": "none",
+        "capability_profiles": [
+          "P_PUBLISH"
+        ],
+        "execution_kind": "DETERMINISTIC",
+        "billing": {
+          "mode": "NONE",
+          "incremental_paid_usage": false
+        },
+        "capacity": {
+          "observation_mode": "NONE"
+        },
+        "dispatch": {
+          "kind": "GITHUB_WORKFLOW",
+          "repository": "acme/control",
+          "workflow": "agenti-publish.yml"
+        }
+      }
+    },
+    "policies": [
+      {
+        "policy_id": "cost-min-a",
+        "match": {
+          "roles": [
+            "A"
+          ],
+          "purposes": [
+            "*"
+          ]
+        },
+        "candidates": [
+          "claude-a"
+        ],
+        "selection": "ORDERED",
+        "paid_execution": {
+          "mode": "FORBIDDEN"
+        },
+        "wait_policy": {
+          "on_included_exhausted": "WAIT",
+          "try_next_included_before_wait": true,
+          "max_wait_seconds": 21600,
+          "on_max_wait": "HUMAN",
+          "minimum_reconcile_seconds": 900
+        }
+      },
+      {
+        "policy_id": "cost-min-d",
+        "match": {
+          "roles": [
+            "D"
+          ],
+          "purposes": [
+            "*"
+          ]
+        },
+        "candidates": [
+          "claude-d"
+        ],
+        "selection": "ORDERED",
+        "paid_execution": {
+          "mode": "FORBIDDEN"
+        },
+        "wait_policy": {
+          "on_included_exhausted": "WAIT",
+          "try_next_included_before_wait": true,
+          "max_wait_seconds": 21600,
+          "on_max_wait": "HUMAN",
+          "minimum_reconcile_seconds": 900
+        }
+      },
+      {
+        "policy_id": "cost-min-r",
+        "match": {
+          "roles": [
+            "R"
+          ],
+          "purposes": [
+            "*"
+          ]
+        },
+        "candidates": [
+          "claude-r"
+        ],
+        "selection": "ORDERED",
+        "paid_execution": {
+          "mode": "FORBIDDEN"
+        },
+        "wait_policy": {
+          "on_included_exhausted": "WAIT",
+          "try_next_included_before_wait": true,
+          "max_wait_seconds": 21600,
+          "on_max_wait": "HUMAN",
+          "minimum_reconcile_seconds": 900
+        }
+      },
+      {
+        "policy_id": "deterministic-p",
+        "match": {
+          "roles": [
+            "P"
+          ],
+          "purposes": [
+            "*"
+          ]
+        },
+        "candidates": [
+          "deterministic-p"
+        ],
+        "selection": "ORDERED",
+        "paid_execution": {
+          "mode": "FORBIDDEN"
+        },
+        "wait_policy": {
+          "on_included_exhausted": "WAIT",
+          "try_next_included_before_wait": true,
+          "on_max_wait": "HUMAN",
+          "minimum_reconcile_seconds": 900
+        }
+      }
+    ]
+  }
+}
