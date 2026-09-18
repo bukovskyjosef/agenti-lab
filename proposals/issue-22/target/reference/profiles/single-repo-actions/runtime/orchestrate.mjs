@@ -503,8 +503,13 @@ async function buildSnapshot(github, runtime, state, issue, comments) {
   };
 
   if (!state) {
+    const humanActorIds = new Set(
+      runtime.projectProfile.human.principals.map((principal) => principal.actor_id)
+    );
     snapshot.intake = {
-      accepted: issue.labels.some((label) => label.name === runtime.runtimeConfig.intake_label)
+      accepted:
+        issue.labels.some((label) => label.name === runtime.runtimeConfig.intake_label) &&
+        humanActorIds.has(issue.user?.id)
     };
     snapshot.work_item = {
       control_repository: github.repository,
