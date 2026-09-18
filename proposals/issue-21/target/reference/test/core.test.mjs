@@ -14,7 +14,8 @@ import {
   renderStateComment,
   runEligibility,
   verifyAcceptedEvidence,
-  validateSchema
+  validateSchema,
+  projectAction
 } from "../core/index.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -217,6 +218,196 @@ test("A READY deterministically produces explicit D assignment", () => {
   assert.equal(action.assignment.role, "D");
   assert.equal(action.assignment.purpose, "IMPLEMENT_CURRENT_CONTRACT");
   assert.match(action.assignment.assignment_id, /^asg-/);
+});
+
+function buildPendingReleaseState() {
+  const state = structuredClone(baseState);
+  state.lifecycle = "IN_REVIEW";
+  state.candidate = {
+    kind: "single",
+    generation: 1,
+    digest: digest({ sha: "d".repeat(40) }),
+    members: [
+      {
+        repository: "example/product",
+        pr_number: 11,
+        head_sha: "d".repeat(40),
+        base_ref_or_sha: "main"
+      }
+    ]
+  };
+
+  const targetDigest = digest({ target: "production" });
+  const gateDigest = digest({ checks: ["unit"], review: "approved" });
+  const approvedR = {
+    role: "R",
+    status: "COMPLETED",
+    result_digest: digest({ result: "r-approved-release" }),
+    payload: {
+      outcome: "APPROVED",
+      correction_owner: "NONE"
+    }
+  };
+
+  const t08 = evaluate(
+    profile,
+    state,
+    {
+      role_result: approvedR,
+      required_gates_current: true,
+      required_evidence_digest: gateDigest,
+      target_digest: targetDigest
+    },
+    { observed_at: "2026-09-18T10:40:00Z" },
+    transitionTable
+  );
+
+  assert.equal(t08.transition_id, "T08");
+  assert.equal(t08.release_authorization.status, "PENDING");
+
+  const projected = projectAction(state, t08, "o-run-t08");
+  return { state: projected, targetDigest, gateDigest };
+}
+
+function exactGrantSnapshot(releaseState, targetDigest, gateDigest) {
+  const authorization = releaseState.release_authorization;
+  const currentResponse = {
+    evidence_kind: "issue_comment",
+    repository: "example/product",
+    object_id: 990,
+    actor_id: 1001,
+    updated_at: "2026-09-18T10:41:00Z",
+    normalized_payload: {
+      command: "release-grant",
+      authorization_id: authorization.authorization_id
+    },
+    normalized_outcome: "GRANTED"
+  };
+  const responseBinding = acceptMutableEvidence({
+    ...currentResponse,
+    context_binding: authorization.context_digest
+  });
+
+  return {
+    required_gates_current: true,
+    required_evidence_digest: gateDigest,
+    target_digest: targetDigest,
+    release_response: {
+      status: "GRANTED",
+      authorization_id: authorization.authorization_id,
+      candidate_digest: releaseState.candidate.digest,
+      target_digest: targetDigest,
+      gate_digest: gateDigest,
+      context_digest: authorization.context_digest,
+      response_binding: responseBinding,
+      current_response: currentResponse
+    }
+  };
+}
+
+test("F2 positive: T09 dispatches P only for exact current release grant", () => {
+  const { state, targetDigest, gateDigest } = buildPendingReleaseState();
+  const snapshot = exactGrantSnapshot(state, targetDigest, gateDigest);
+
+  const t09 = evaluate(
+    profile,
+    state,
+    snapshot,
+    { observed_at: "2026-09-18T10:42:00Z" },
+    transitionTable
+  );
+
+  assert.equal(t09.transition_id, "T09");
+  assert.equal(t09.assignment.role, "P");
+  assert.equal(t09.assignment.state.version, state.state_version + 1);
+  assert.equal(t09.release_authorization.status, "GRANTED");
+
+  const projected = projectAction(state, t09, "o-run-t09");
+  assert.equal(projected.assignment.bound_state_version, projected.state_version);
+  assert.equal(projected.release_authorization.status, "GRANTED");
+});
+
+test("F2 candidate drift invalidates release grant and never dispatches P", () => {
+  const { state, targetDigest, gateDigest } = buildPendingReleaseState();
+  const snapshot = exactGrantSnapshot(state, targetDigest, gateDigest);
+  snapshot.release_response.candidate_digest = digest({ candidate: "other" });
+
+  const action = evaluate(
+    profile,
+    state,
+    snapshot,
+    { observed_at: "2026-09-18T10:43:00Z" },
+    transitionTable
+  );
+
+  assert.equal(action.kind, "INVALIDATE");
+  assert.equal(action.reason, "RELEASE_CANDIDATE_OR_AUTHORIZATION_DRIFT");
+  assert.equal(action.earliest_affected_point, "IN_REVIEW");
+  assert.equal(action.assignment, undefined);
+});
+
+test("F2 target drift invalidates release grant and never dispatches P", () => {
+  const { state, targetDigest, gateDigest } = buildPendingReleaseState();
+  const snapshot = exactGrantSnapshot(state, targetDigest, gateDigest);
+  snapshot.target_digest = digest({ target: "different-production" });
+
+  const action = evaluate(
+    profile,
+    state,
+    snapshot,
+    { observed_at: "2026-09-18T10:44:00Z" },
+    transitionTable
+  );
+
+  assert.equal(action.kind, "INVALIDATE");
+  assert.equal(action.reason, "RELEASE_TARGET_DRIFT");
+  assert.equal(action.assignment, undefined);
+});
+
+test("F2 gate drift invalidates release grant and never dispatches P", () => {
+  const { state, targetDigest, gateDigest } = buildPendingReleaseState();
+  const snapshot = exactGrantSnapshot(state, targetDigest, gateDigest);
+  snapshot.required_gates_current = false;
+
+  const action = evaluate(
+    profile,
+    state,
+    snapshot,
+    { observed_at: "2026-09-18T10:45:00Z" },
+    transitionTable
+  );
+
+  assert.equal(action.kind, "INVALIDATE");
+  assert.equal(action.reason, "RELEASE_GATE_DRIFT");
+  assert.equal(action.earliest_affected_point, "IN_REVIEW");
+  assert.equal(action.assignment, undefined);
+});
+
+test("F2 mutable H response drift invalidates release grant and never dispatches P", () => {
+  const { state, targetDigest, gateDigest } = buildPendingReleaseState();
+  const snapshot = exactGrantSnapshot(state, targetDigest, gateDigest);
+  snapshot.release_response.current_response = {
+    ...snapshot.release_response.current_response,
+    updated_at: "2026-09-18T10:46:00Z",
+    normalized_payload: {
+      command: "release-reject",
+      authorization_id: state.release_authorization.authorization_id
+    },
+    normalized_outcome: "REJECTED"
+  };
+
+  const action = evaluate(
+    profile,
+    state,
+    snapshot,
+    { observed_at: "2026-09-18T10:46:30Z" },
+    transitionTable
+  );
+
+  assert.equal(action.kind, "INVALIDATE");
+  assert.equal(action.reason, "ACCEPTED_MUTABLE_EVIDENCE_CHANGED");
+  assert.equal(action.evidence_status, "DRIFTED");
+  assert.equal(action.assignment, undefined);
 });
 
 test("multi-repo candidate change uses mechanical T19 rebind", () => {
