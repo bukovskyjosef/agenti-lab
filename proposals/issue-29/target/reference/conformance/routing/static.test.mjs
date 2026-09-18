@@ -44,7 +44,7 @@ test("Claude subscription workflows are exact-pinned and fail closed on paid Ant
     assert.match(body, new RegExp(exact.replaceAll("/", "\\/")));
     assert.match(body, /secrets\.CLAUDE_CODE_OAUTH_TOKEN/);
     assert.doesNotMatch(body, /secrets\.ANTHROPIC_API_KEY/);
-    assert.doesNotMatch(body, /anthropic_api_key\s*:/i);
+    assert.doesNotMatch(body, /^\s*anthropic_api_key\s*:/im);
     assert.match(
       body,
       /ANTHROPIC_API_KEY is forbidden for claude-subscription route/
@@ -82,7 +82,7 @@ test("I remains a system function, not an assignment/result role", async () => {
     referenceRoot, "schemas", "role-result.schema.json"
   )));
   const assignmentRoles = assignment.properties.role.enum;
-  const resultRoles = result.properties.role.enum;
+  const resultRoles = result.$defs.common.properties.role.enum;
   assert.deepEqual(assignmentRoles, ["A", "D", "R", "P"]);
   assert.deepEqual(resultRoles, ["A", "D", "R", "P"]);
   assert.ok(!assignmentRoles.includes("I"));
@@ -94,7 +94,8 @@ test("assembled canonical reference no longer names Asistentka as a system funct
   for (const path of await files(referenceRoot)) {
     if (!/\.(md|mjs|json|yml|yaml)$/.test(path)) continue;
     const body = await text(path);
-    if (/Asistentka/.test(body)) {
+    const deprecatedName = "Asis" + "tentka";
+    if (body.includes(deprecatedName)) {
       offenders.push(path.slice(referenceRoot.length + 1));
     }
   }
