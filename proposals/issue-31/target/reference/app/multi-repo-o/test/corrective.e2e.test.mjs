@@ -9,6 +9,7 @@ import {
   ROLE_RESULT_JSON_START
 } from "../src/evidence.mjs";
 import { OperationalStore } from "../src/store.mjs";
+import { workItemKey } from "../src/mapping.mjs";
 
 const transitionTable = JSON.parse(await readFile(
   new URL(
@@ -225,8 +226,20 @@ function roleResultBody(result) {
   ].join("\n");
 }
 
-function fakeGitHub({ issue, state, comments = [], runIds = [9001] }) {
+function fakeGitHub({
+  issue,
+  state,
+  comments = [],
+  runIds = [9001],
+  branchHeads = {}
+}) {
   let currentState = structuredClone(state);
+  const currentBranchHeads = new Map([
+    ["acme/control", "a".repeat(40)],
+    ["acme/service-a", "b".repeat(40)],
+    ["acme/service-b", "c".repeat(40)],
+    ...Object.entries(branchHeads)
+  ]);
   let nextCommentId = 700;
   const dispatches = [];
   const runs = new Map();
@@ -250,6 +263,16 @@ function fakeGitHub({ issue, state, comments = [], runIds = [9001] }) {
     workflowIds.get(`${repository}:${workflow}`) ?? 999;
 
   const gh = {
+    getRepository: async (repository) => ({
+      full_name: repository,
+      default_branch: "main"
+    }),
+    getBranch: async (repository, branch) => ({
+      name: branch,
+      commit: {
+        sha: currentBranchHeads.get(repository) ?? "f".repeat(40)
+      }
+    }),
     getIssue: async () => issue,
     listIssueComments: async () => allComments,
     createIssueComment: async (_repository, _issueNumber, body) => {
@@ -336,6 +359,9 @@ function fakeGitHub({ issue, state, comments = [], runIds = [9001] }) {
       run.status = status;
       run.conclusion = conclusion;
     },
+    setBranchHead(repository, sha) {
+      currentBranchHeads.set(repository, sha);
+    },
     currentState: () => currentState,
     dispatches,
     comments: allComments
@@ -399,7 +425,22 @@ function assignmentEnvelopeForState(state, projectProfile, issuedAt) {
       }))
     ],
     capability_profile: a.capability_profile,
-    claim: { required: true },
+    claim: (() => {
+      if (a.role === "A") {
+        const target_binding = {
+          kind: "A_CONTRACT",
+          control_repository: state.work_item.control_repository,
+          issue_number: state.work_item.issue_number,
+          contract_digest: state.contract.digest
+        };
+        return {
+          required: true,
+          target_binding,
+          target_digest: core.digest(target_binding)
+        };
+      }
+      return { required: true };
+    })(),
     independence: {
       required: a.role === "R",
       must_differ_from_execution_instances:
@@ -1071,4 +1112,167 @@ test("PLATFORM_RUN recovery survives DB loss and redispatches with a new claim g
   );
 
   restartedStore.close();
+});
+
+
+test("F1 non-expiring mutation fence outlives SQLite lease expiry and blocks receiver mutation", async () => {
+  const issue = {
+    number: 42,
+    title: "Lease expiry race",
+    body: "Stable contract",
+    updated_at: "2026-09-18T12:00:00Z",
+    labels: [{ name: "agenti:managed" }]
+  };
+  const projectProfile = profile();
+  const state = baseState({
+    issue,
+    role: "A",
+    lifecycle: "ANALYSIS",
+    version: 4
+  });
+  const assignment = assignmentEnvelopeForState(
+    state,
+    projectProfile,
+    "2026-09-18T12:00:00Z"
+  );
+  const gh = fakeGitHub({ issue, state, runIds: [] });
+  gh.addRun({
+    repository: "acme/control",
+    workflow: "a.yml",
+    runId: 9501
+  });
+
+  const store = new OperationalStore(":memory:");
+  const o = orchestrator({ gh, store, projectProfile });
+  const key = workItemKey(workItem());
+
+  // Operational lease demonstrates the reviewer's failure mode: a second
+  // owner can acquire it after expiry while the first async O call is alive.
+  assert.equal(store.acquireWorkLease({
+    workKey: key,
+    owner: "o-worker",
+    leaseMs: 5,
+    now: 0
+  }), true);
+
+  let releaseO;
+  const holdO = new Promise((resolve) => { releaseO = resolve; });
+  let oEntered;
+  const enteredO = new Promise((resolve) => { oEntered = resolve; });
+  const originalUnlocked = o.processWorkItemUnlocked.bind(o);
+  o.processWorkItemUnlocked = async () => {
+    oEntered();
+    await holdO;
+    return {
+      action: { kind: "NO_OP", reason: "TEST" },
+      state: gh.currentState(),
+      dispatched: null
+    };
+  };
+
+  const oPromise = o.processWorkItem(
+    workItem(),
+    "2026-09-18T12:00:00Z"
+  );
+  await enteredO;
+
+  assert.equal(store.acquireWorkLease({
+    workKey: key,
+    owner: "receiver-after-expiry",
+    leaseMs: 5,
+    now: 10
+  }), true, "expiring SQLite lease alone would permit the second mutator");
+
+  let receiverSettled = false;
+  const receiverPromise = o.verifyAssignment(
+    assignment,
+    "acme/control",
+    "9501",
+    "1"
+  ).then((result) => {
+    receiverSettled = true;
+    return result;
+  });
+
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(
+    receiverSettled,
+    false,
+    "receiver must still wait on the non-expiring shared mutation fence"
+  );
+
+  releaseO();
+  await oPromise;
+  const receiver = await receiverPromise;
+  assert.equal(receiver.valid, true);
+  assert.equal(
+    gh.currentState().claim_control.active_claim.owner.platform_run_id,
+    "9501"
+  );
+
+  o.processWorkItemUnlocked = originalUnlocked;
+  store.close();
+});
+
+test("F2 D base move between assignment issuance and receiver claim yields no provider authority", async () => {
+  const issue = {
+    number: 42,
+    title: "Exact D target",
+    body: "Stable contract",
+    updated_at: "2026-09-18T12:00:00Z",
+    labels: [{ name: "agenti:managed" }]
+  };
+  const projectProfile = profile();
+  const state = baseState({
+    issue,
+    role: "D",
+    lifecycle: "IN_PROGRESS",
+    version: 5
+  });
+  const assignment = assignmentEnvelopeForState(
+    state,
+    projectProfile,
+    "2026-09-18T12:00:00Z"
+  );
+  const issuedBinding = {
+    kind: "D_BASE",
+    repository: "acme/service-a",
+    base_ref: "main",
+    base_sha: "b".repeat(40)
+  };
+  assignment.claim = {
+    required: true,
+    target_binding: issuedBinding,
+    target_digest: core.digest(issuedBinding)
+  };
+
+  const gh = fakeGitHub({
+    issue,
+    state,
+    runIds: [],
+    branchHeads: { "acme/service-a": "b".repeat(40) }
+  });
+  gh.addRun({
+    repository: "acme/service-a",
+    workflow: "d.yml",
+    runId: 9601
+  });
+
+  // Base moves after issuance but before receiver preflight.
+  gh.setBranchHead("acme/service-a", "d".repeat(40));
+
+  const store = new OperationalStore(":memory:");
+  const o = orchestrator({ gh, store, projectProfile });
+  const result = await o.verifyAssignment(
+    assignment,
+    "acme/service-a",
+    "9601",
+    "1"
+  );
+
+  assert.equal(result.valid, false);
+  assert.equal(result.reason, "ASSIGNMENT_TARGET_BINDING_STALE");
+  assert.equal(gh.currentState().claim_control.active_claim, null);
+  store.close();
 });
