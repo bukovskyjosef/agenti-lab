@@ -103,7 +103,9 @@ jobs:
 
 A normalized GitHub Actions result is accepted only from a configured trusted wrapper actor and only when its `run_id`/`run_attempt` resolve to the configured runner repository. Its execution instance ID must be `github-actions:<repository>:<run_id>:<run_attempt>`; self-reported logical IDs are rejected.
 
-The verification endpoint fresh-reads the control issue/state plus implementation repositories, rejects a stale fingerprint/candidate/repository mapping, and refuses the assignment if the shared core now authorizes another transition. The preflight also sends `GITHUB_RUN_ID` and `GITHUB_RUN_ATTEMPT`; O verifies that run against the configured workflow/repository and CAS-binds the owning run into the current GitHub state before provider work. A different run for the same assignment is rejected. The provider output itself never changes O state directly.
+Before dispatch, O derives a role-specific immutable claim target and embeds its `target_binding` + `target_digest` in the assignment envelope. For an initial D assignment this includes the implementation repository default branch and its exact current SHA. The receiver verification endpoint fresh-reads the control issue/state and re-derives that target before claim acquisition; target drift yields no provider-work authority. It repeats the target check immediately after claim grant before returning success.
+
+The preflight also sends `GITHUB_RUN_ID` and `GITHUB_RUN_ATTEMPT`; O verifies that run against the configured workflow/repository and CAS-binds the owning run plus exact target digest into the current GitHub claim before provider work. A different run or stale target for the same assignment is rejected. The provider output itself never changes O state directly.
 
 ## Operational queue and recovery
 
