@@ -107,6 +107,7 @@ try {
   run(process.execPath, ["--test", "conformance/claims/recovery.test.mjs"], referenceRoot);
   run(process.execPath, ["--test", "conformance/claims/cas-ambiguity.test.mjs"], referenceRoot);
   run(process.execPath, ["--test", "conformance/claims/preflight-currentness.test.mjs"], referenceRoot);
+  run(process.execPath, ["--test", "conformance/claims/material-recovery.test.mjs"], referenceRoot);
   run(process.execPath, ["--test", "conformance/single-repo-actions/static.test.mjs"], referenceRoot);
   run(process.execPath, ["--test", "conformance/single-repo-actions/local-e2e.test.mjs"], referenceRoot);
   run("npm", ["test"], join(referenceRoot, "app", "multi-repo-o"));
