@@ -34,7 +34,7 @@ The service exposes:
 - `GET /readyz` — configuration/store readiness;
 - `POST /assignment/verify` — receiver-side fresh assignment/current-state verification before a role/provider starts.
 
-`compose.yml` is a single-node example with a persistent `/data` SQLite volume. The service can be restarted or its operational database can be lost without losing workflow authority; reconcile reconstructs from GitHub.
+`compose.yml` is a single-node example with a persistent `/data` SQLite volume. In the lab it builds from the repository root so the container copies the exact R-approved Child #21 core; final integration in Child #24 may collapse that path to the published sibling `reference/core/` layout. The service can be restarted or its operational database can be lost without losing workflow authority; reconcile reconstructs from GitHub.
 
 ## GitHub App setup
 
@@ -45,6 +45,7 @@ The service exposes:
 5. Set `AGENTI_INSTALLATIONS_JSON` to the repository → installation-id map. Token acquisition is repository-scoped even when one installation spans several repositories.
 6. Set `AGENTI_TRUSTED_RESULT_ACTOR_IDS` to the immutable numeric GitHub actor IDs used by deterministic role-result wrappers.
 7. Keep P credentials outside this service. The manifest intentionally lacks `Contents: write`.
+8. State projection comments are trusted only when GitHub reports `performed_via_github_app.id` equal to this configured O App ID; a user-authored marker is never workflow authority.
 
 Subscribed events are limited to wake/reconcile inputs used by the adapter: `issues`, `issue_comment`, `pull_request`, `pull_request_review`, `check_run`, `workflow_run`, and `deployment_status`.
 
