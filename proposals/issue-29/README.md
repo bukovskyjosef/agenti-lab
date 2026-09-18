@@ -1,6 +1,6 @@
 # Issue #29 — Child 5 exact implementation target
 
-Status: **E implementation complete; pending final exact-head validation + independent R**
+Status: **READY FOR INDEPENDENT R after durable E handoff**
 
 Authority:
 - Parent Intent #20
