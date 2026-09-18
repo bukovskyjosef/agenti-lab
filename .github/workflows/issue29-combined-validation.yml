@@ -1,0 +1,23 @@
+name: Issue 29 temporary combined validation
+
+on:
+  push:
+    branches:
+      - issue-29/cost-capacity-interface
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.16.0"
+      - name: Assemble exact approved dependencies plus Child 5 and validate
+        run: node proposals/issue-29/assemble-and-validate.mjs --docker
