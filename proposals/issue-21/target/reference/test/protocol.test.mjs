@@ -7,7 +7,8 @@ import {
   generateAssignment,
   normalizeRoleResult,
   applyRoleResult,
-  verifyExecutionIndependence
+  verifyExecutionIndependence,
+  validateSchema
 } from "../core/index.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -16,6 +17,7 @@ const readJson = async (path) => JSON.parse(await readFile(resolve(root, path), 
 const profile = await readJson("conformance/fixtures/project-profile.valid.json");
 const baseState = await readJson("conformance/fixtures/base-state.json");
 const roleResultSchema = await readJson("schemas/role-result.schema.json");
+const assignmentSchema = await readJson("schemas/assignment.schema.json");
 
 function reviewerAssignment(authorInstance = "exec-author-1") {
   const state = structuredClone(baseState);
@@ -46,6 +48,8 @@ function reviewerAssignment(authorInstance = "exec-author-1") {
       enforcement_mechanism: "fresh-wrapper"
     }
   });
+
+  assert.deepEqual(validateSchema(assignment, assignmentSchema), []);
 
   state.assignment = {
     assignment_id: assignment.assignment_id,
