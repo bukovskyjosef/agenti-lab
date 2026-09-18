@@ -16,7 +16,8 @@ import {
 import {
   assignmentFromState,
   callback,
-  loadRuntime
+  loadRuntime,
+  preClaimCurrentness
 } from "./runner.mjs";
 
 function releaseCommand(body) {
@@ -132,6 +133,22 @@ export async function publishCurrent({ issueNumber, assignmentId, contextPath = 
     executionInstanceId: runContext.attestation?.execution_instance_id
   });
   if (!claimCheck.valid) throw new Error("P_WRITE_CLAIM_NOT_CURRENT: " + claimCheck.reason);
+
+  const assignment = assignmentFromState(state, runtime.projectProfile);
+  const writerCurrent = await preClaimCurrentness({
+    github,
+    runtime,
+    state,
+    assignment,
+    comments: loaded.comments
+  });
+  if (!writerCurrent.current) {
+    throw new Error("P_WRITE_CURRENTNESS_FAILED: " + writerCurrent.reason);
+  }
+  if (writerCurrent.target_digest !== claimGrant.binding.target_digest) {
+    throw new Error("P_WRITE_TARGET_BINDING_DRIFT");
+  }
+
   if (state.candidate.kind !== "single" || !state.candidate.members[0]?.pr_number) throw new Error("NO_EXACT_SINGLE_REPO_CANDIDATE");
 
   const pull = await github.getPull(state.candidate.members[0].pr_number);
@@ -199,7 +216,8 @@ export async function publishCurrent({ issueNumber, assignmentId, contextPath = 
       repository: github.repository,
       pr_number: pull.number,
       expected_head: state.candidate.members[0].head_sha,
-      target_branch: runtime.runtimeConfig.default_branch
+      target_branch: runtime.runtimeConfig.default_branch,
+      claim_target_digest: claimGrant.binding.target_digest
     }
   });
 
@@ -210,7 +228,6 @@ export async function publishCurrent({ issueNumber, assignmentId, contextPath = 
   });
   if (!merge?.merged || !merge.sha) throw new Error("MERGE_FAILED: " + JSON.stringify(merge));
 
-  const assignment = assignmentFromState(state, runtime.projectProfile);
   const proposal = {
     role: "P",
     status: "COMPLETED",
