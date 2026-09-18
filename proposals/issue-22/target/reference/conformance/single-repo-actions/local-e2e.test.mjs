@@ -44,7 +44,8 @@ function makeMockGitHub() {
         "## Context", "", "agenti-e2e-scenario: happy", ""
       ].join("\n"),
       labels: [{ name: "agenti:managed" }],
-      updated_at: "2026-09-18T11:00:00Z"
+      updated_at: "2026-09-18T11:00:00Z",
+      user: { id: 1001, login: "human", type: "User" }
     },
     comments: [],
     nextCommentId: 100,
@@ -57,7 +58,7 @@ function makeMockGitHub() {
     }
   };
 
-  function addComment(body, user = { id: 999, login: "github-actions[bot]" }) {
+  function addComment(body, user = { id: 999, login: "github-actions[bot]", type: "Bot" }) {
     const comment = {
       id: store.nextCommentId++,
       body,
@@ -334,7 +335,7 @@ test("local fixture E2E reaches Done through O/A/D/R/H/P without role relay", as
     // Exact configured H grant -> P. This is Human authority, not role relay.
     mock.addComment(
       "/agenti release grant " + state.release_authorization.authorization_id,
-      { id: 1001, login: "human" }
+      { id: 1001, login: "human", type: "User" }
     );
     result = await orchestrator.processIssue(42);
     assert.equal(result.status, "ASSIGNED");
