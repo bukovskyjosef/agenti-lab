@@ -48,6 +48,39 @@ export function preRunEligibility({ state, request }) {
   if (state.lifecycle === "STOPPED") return { eligible: false, reason: "WORK_ITEM_STOPPED" };
   const assignment = state.assignment;
   if (!assignment) return { eligible: false, reason: "ASSIGNMENT_MISSING" };
+  if (
+    Number.isInteger(assignment.bound_state_version) &&
+    assignment.bound_state_version !== state.state_version
+  ) {
+    return { eligible: false, reason: "ASSIGNMENT_STATE_BINDING_STALE" };
+  }
+  if (
+    (state.human_requests?.active ?? []).some(
+      (entry) => entry.status === "PENDING"
+    )
+  ) {
+    return { eligible: false, reason: "HUMAN_INPUT_PENDING" };
+  }
+  if (
+    state.material_operation?.status === "PREPARED" ||
+    state.material_operation?.status === "HUMAN_ACTION_REQUIRED"
+  ) {
+    return {
+      eligible: false,
+      reason: "MATERIAL_OPERATION_RECONCILIATION_REQUIRED"
+    };
+  }
+  if (
+    request?.role === "P" &&
+    !["GRANTED", "NOT_REQUIRED"].includes(
+      state.release_authorization?.status
+    )
+  ) {
+    return {
+      eligible: false,
+      reason: "RELEASE_AUTHORIZATION_NOT_CURRENT"
+    };
+  }
   const control = claimControlOf(state);
 
   if (!ROLE_SET.has(request?.role)) return { eligible: false, reason: "ROLE_INVALID" };
