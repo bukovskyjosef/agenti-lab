@@ -1,16 +1,18 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import {
+  acquireClaimCAS,
   digest,
   normalizeRoleResult,
+  verifyActiveClaim,
   validateSchema
 } from "../core/index.mjs";
 import { githubClientFromEnv } from "./github.mjs";
 import {
-  findRunClaim,
   loadState,
   renderMachineComment,
-  ROLE_RESULT_MARKER
+  ROLE_RESULT_MARKER,
+  saveStateCAS
 } from "./state.mjs";
 import { applyContractOperations } from "./contract.mjs";
 
@@ -72,6 +74,7 @@ export function assignmentFromState(state, profile) {
       { kind: "agent_entrypoint", ref: "AGENTS.md" }
     ],
     capability_profile: a.capability_profile,
+    claim: { required: true },
     independence: {
       required: a.role === "R",
       must_differ_from_execution_instances: a.must_differ_from_execution_instances ?? [],
@@ -144,13 +147,6 @@ export async function prepareRun({ role, issueNumber, assignmentId, outDir = ".a
     throw new Error("ROUTING_CANDIDATE_WORKFLOW_MISMATCH");
   }
 
-  const existingClaim = findRunClaim(loaded.comments, assignmentId);
-  if (existingClaim) {
-    await writeOutput("skip", "true");
-    await writeOutput("claim_comment_id", existingClaim.id);
-    return { skip: true, existingClaim };
-  }
-
   const assignment = assignmentFromState(state, runtime.projectProfile);
   const assignmentErrors = validateSchema(assignment, runtime.assignmentSchema);
   if (assignmentErrors.length) throw new Error("Assignment schema invalid: " + assignmentErrors.join("; "));
@@ -161,11 +157,9 @@ export async function prepareRun({ role, issueNumber, assignmentId, outDir = ".a
   }
 
   const attestation = {
-    adapter_id:
-      assignment.execution_route?.adapter_id ??
+    adapter_id: state.assignment.execution_route?.adapter_id ??
       (role === "P" ? "deterministic-actions-publisher" : "codex-action"),
-    adapter_version:
-      assignment.execution_route?.adapter_version ?? "1",
+    adapter_version: state.assignment.execution_route?.adapter_version ?? "1",
     execution_instance_id: executionInstanceId,
     platform_run: {
       provider: "github-actions",
@@ -181,34 +175,65 @@ export async function prepareRun({ role, issueNumber, assignmentId, outDir = ".a
     attested_by: "deterministic-wrapper"
   };
 
-  const claim = await github.createIssueComment(
+  const recoveryMode = runtime.projectProfile.work_item_claims?.recovery?.mode ?? "MANUAL_H";
+  const leaseMode =
+    recoveryMode === "PLATFORM_RUN" ? "PLATFORM_RUN" :
+    recoveryMode === "EXPIRING_HEARTBEAT" ? "EXPIRING_HEARTBEAT" :
+    "NONE";
+  const claimRequest = {
+    schema_version: 1,
+    work_item: assignment.work_item,
+    assignment_id: assignment.assignment_id,
+    role: assignment.role,
+    purpose: assignment.purpose,
+    expected: {
+      workflow_state_version: state.state_version,
+      claim_version: state.claim_control?.claim_version ?? 0,
+      assignment_freshness_fingerprint: assignment.state.fingerprint,
+      semantic_work_digest: assignment.semantic_work_digest ?? null,
+      candidate_digest: state.candidate?.digest ?? null,
+      active_claim: "ABSENT"
+    },
+    claimant: { execution_attestation: attestation },
+    lease: { mode: leaseMode },
+    requested_at: new Date().toISOString(),
+    request_id: "claim-request-" + randomUUID()
+  };
+  const acquired = acquireClaimCAS({
+    state,
+    request: claimRequest,
+    acquiredAt: claimRequest.requested_at
+  });
+  if (!acquired.acquired) {
+    await writeOutput("skip", "true");
+    await writeOutput("claim_reason", acquired.reason);
+    return { skip: true, reason: acquired.reason };
+  }
+
+  await saveStateCAS(
+    github,
     issueNumber,
-    renderMachineComment(
-      "agenti-run-claim:" + assignmentId,
-      "Deterministic run claim created before provider invocation.",
-      {
-        assignment_id: assignmentId,
-        role,
-        execution_attestation: attestation,
-        workflow_run_url: process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID
-          ? process.env.GITHUB_SERVER_URL + "/" + process.env.GITHUB_REPOSITORY + "/actions/runs/" + process.env.GITHUB_RUN_ID
-          : null
-      }
-    )
+    acquired.state,
+    runtime.workflowStateSchema,
+    loaded.comment,
+    state.state_version,
+    state.claim_control?.claim_version ?? 0
   );
+  const claimGrant = acquired.grant;
 
   const issue = await github.getIssue(issueNumber);
   await mkdir(outDir, { recursive: true });
   await writeFile(outDir + "/assignment.json", JSON.stringify(assignment, null, 2));
-  await writeFile(outDir + "/run-context.json", JSON.stringify({ attestation, claim_comment_id: claim.id }, null, 2));
+  await writeFile(outDir + "/run-context.json", JSON.stringify({ attestation, claim_grant: claimGrant }, null, 2));
   await writeFile(outDir + "/work-item.md", issue.body ?? "");
   await writeFile(outDir + "/comments.json", JSON.stringify(loaded.comments, null, 2));
 
   await writeOutput("skip", "false");
-  await writeOutput("claim_comment_id", claim.id);
+  await writeOutput("claim_id", claimGrant.claim_id);
+  await writeOutput("claim_generation", claimGrant.claim_generation);
   await writeOutput("execution_instance_id", executionInstanceId);
   await writeOutput("candidate_ref", assignment.candidate.members?.[0]?.head_sha ?? runtime.runtimeConfig.default_branch);
-  return { skip: false, assignment, attestation, claim };
+  return { skip: false, assignment, attestation, claimGrant };
 }
 
 export async function finalizeRun({ role, issueNumber, assignmentId, proposalPath, contextPath = ".agenti-run/run-context.json" }) {
@@ -234,9 +259,20 @@ export async function finalizeRun({ role, issueNumber, assignmentId, proposalPat
   if (proposalErrors.length) throw new Error("Provider proposal invalid: " + proposalErrors.join("; "));
   const proposal = sanitizeProposal(role, rawProposal);
   const runContext = await readJson(contextPath);
+  const claimGrant = runContext.claim_grant;
+  const claimCheck = verifyActiveClaim({
+    state,
+    assignmentId: assignment.assignment_id,
+    claimId: claimGrant?.claim_id,
+    claimGeneration: claimGrant?.claim_generation,
+    executionInstanceId: runContext.attestation?.execution_instance_id
+  });
+  if (!claimCheck.valid) throw new Error("CLAIM_NOT_CURRENT: " + claimCheck.reason);
 
   const trustedFacts = {
     assignment_id: assignment.assignment_id,
+    claim_id: claimGrant.claim_id,
+    claim_generation: claimGrant.claim_generation,
     observed_state_version: assignment.state.version,
     observed_fingerprint: assignment.state.fingerprint,
     execution_attestation: runContext.attestation,
