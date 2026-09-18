@@ -553,6 +553,26 @@ export function validateRoutingConfiguration(profile) {
 
   for (let i = 0; i < policies.length; i += 1) {
     const policy = policies[i];
+
+    if (
+      policy.paid_execution?.mode === "ALLOWED_WITH_BUDGET" &&
+      !policy.paid_execution?.budget
+    ) {
+      errors.push(
+        "policy " + policy.policy_id +
+        " ALLOWED_WITH_BUDGET requires an explicit budget"
+      );
+    }
+    if (
+      policy.paid_execution?.mode === "ALLOWED_WITH_BUDGET" &&
+      !policy.paid_execution?.enforcement
+    ) {
+      errors.push(
+        "policy " + policy.policy_id +
+        " ALLOWED_WITH_BUDGET requires hard-limit enforcement"
+      );
+    }
+
     for (const candidateId of policy.candidates ?? []) {
       if (!catalog[candidateId]) {
         errors.push("policy " + policy.policy_id + " references unknown candidate " + candidateId);
