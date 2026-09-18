@@ -56,9 +56,21 @@ function assignmentEnvelopeFromState(state, profile, observedAt) {
   };
 }
 
-async function writeStateCas({ gh, workItem, previous, stateComment, nextState, core }) {
+async function writeStateCas({
+  gh,
+  workItem,
+  previous,
+  stateComment,
+  nextState,
+  core,
+  trustedStateAppId
+}) {
   const freshComments = await gh.listIssueComments(workItem.control_repository, workItem.issue_number);
-  const freshStateComment = findStateComment(freshComments, core);
+  const freshStateComment = findStateComment(
+    freshComments,
+    core,
+    trustedStateAppId
+  );
 
   if (!previous) {
     if (freshStateComment) throw new Error("STATE_VERSION_CAS_MISMATCH");
@@ -103,13 +115,22 @@ function assignmentMatchesState(assignment, state, profile, core) {
 }
 
 export class MultiRepoOrchestrator {
-  constructor({ gh, profile, core, transitionTable, store, trustedResultActorIds }) {
+  constructor({
+    gh,
+    profile,
+    core,
+    transitionTable,
+    store,
+    trustedResultActorIds,
+    trustedStateAppId = null
+  }) {
     this.gh = gh;
     this.profile = profile;
     this.core = core;
     this.transitionTable = transitionTable;
     this.store = store;
     this.trustedResultActorIds = trustedResultActorIds;
+    this.trustedStateAppId = trustedStateAppId;
   }
 
   async reconstruct(workItem) {
@@ -118,7 +139,8 @@ export class MultiRepoOrchestrator {
       profile: this.profile,
       workItem,
       core: this.core,
-      trustedResultActorIds: this.trustedResultActorIds
+      trustedResultActorIds: this.trustedResultActorIds,
+      trustedStateAppId: this.trustedStateAppId
     });
   }
 
@@ -181,7 +203,8 @@ export class MultiRepoOrchestrator {
       previous: reconstructed.state,
       stateComment: reconstructed.stateComment,
       nextState,
-      core: this.core
+      core: this.core,
+      trustedStateAppId: this.trustedStateAppId
     });
 
     const dispatched = action.assignment
