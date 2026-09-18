@@ -62,6 +62,28 @@ Používej krátké jednoznačné statusy, například:
 
 Pokud agent dokončí svůj krok nebo vznikne nový blocker, musí odpovídající Issue/PR status aktualizovat ještě před handoffem v chatu.
 
+### 2.1 Pre-run authority guard
+
+Explicitní Human instrukce typu `Jsi R. Pracuj na Issue #N` aktivuje roli, ale **není sama o sobě oprávněním obejít aktuální durable workflow state**.
+
+Každý A/E/R/K/P run musí před první materiální prací nebo zápisem:
+
+1. fresh-readnout přidělené Issue, relevantní nové komentáře a linked PR/artefakt,
+2. ověřit, že current `Waiting ownership` / status / explicitní next authority dovoluje právě jeho aktivní roli,
+3. ověřit splnění dependencies, gates a případné exact-target/head binding,
+4. ověřit, že work item není blokovaný, stopped, superseded nebo waiting for jinou autoritu,
+5. u corrective/re-review runu ověřit, že od předchozího běhu existuje nová durable změna, kterou má smysl zpracovat.
+
+Pokud guard neprojde, agent provede **no-op**:
+
+- nezačne analýzu/editaci/review/publish požadované stale instrukcí,
+- nemění si sám waiting ownership ani lifecycle tak, aby si práci dodatečně autorizoval,
+- stručně Humanovi sdělí, proč run není aktuálně eligible a kdo/co je podle durable stavu skutečný další owner/blocker.
+
+Pokud Human skutečně chce změnit pořadí, scope, blocker nebo next authority, tato změna musí být nejprve **durable autorizována** v relevantním Issue/PR. Chatový pokyn může být podkladem pro takovou změnu, ale nemůže durable stav tiše obejít.
+
+Tento guard platí i pro copy-paste prompt, který byl správný v okamžiku předchozího handoffu. Pokud se repository state mezitím změnil, **stale handoff se neprovádí**.
+
 ## 3. K — Konzultant a Human dispatch
 
 K je Human-facing poradce a koordinátor. Pomáhá Humanovi:
@@ -83,7 +105,7 @@ Human může spustit agenta jednoduchou instrukcí typu:
 
 > Jsi R. Pracuj na Issue #N v `bukovskyjosef/agenti-lab`. Řiď se repozitářem.
 
-Agent si načte účel labu, přidělené Issue včetně komentářů a linked artefaktů, pravidla své role z `AGENTS.md` a pouze relevantní část aktuálního `agenti/main`.
+Taková instrukce přiřadí aktivní roli a work item. Agent si načte účel labu, přidělené Issue včetně komentářů a linked artefaktů, pravidla své role z `AGENTS.md` a pouze relevantní část aktuálního `agenti/main`. **Práci zahájí až po úspěšném pre-run authority guardu z §2.1.**
 
 Agent **nepotřebuje automaticky pokračovat na další Issue** a nemá si bez pověření přibírat práci.
 
@@ -190,6 +212,7 @@ Handoff musí splnit:
 
 - prompt je copy-paste ready,
 - prompt odkazuje na repository state a nevyžaduje přenášet soukromý chatový kontext,
+- před vytvořením handoffu agent fresh-readne relevantní Issue/PR a ověří, že doporučovaná role je stále current next authority,
 - agent vybere právě jednu další roli,
 - handoff pouze označuje další potřebnou roli; aktuální session nepřepíná a případné pokračování stejné session vyžaduje nový explicitní role assignment,
 - pokud je uvnitř aktivního Issue potřeba Human decision, agent se ptá přímo Humana a po durable zápisu pokračuje; K není automatický mezikrok,
