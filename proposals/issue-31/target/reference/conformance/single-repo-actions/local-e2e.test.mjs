@@ -217,6 +217,40 @@ test("local fixture E2E reaches Done through O/A/D/R/H/P without role relay", as
       )
     );
 
+    const acquireLocalClaim = (assignment, executionId) => {
+      const current = stateNow();
+      const executionAttestation = attestation(assignment, executionId);
+      const acquired = core.acquireClaimCAS({
+        state: current,
+        request: {
+          schema_version: 1,
+          work_item: assignment.work_item,
+          assignment_id: assignment.assignment_id,
+          role: assignment.role,
+          purpose: assignment.purpose,
+          expected: {
+            workflow_state_version: current.state_version,
+            claim_version: current.claim_control?.claim_version ?? 0,
+            assignment_freshness_fingerprint: assignment.state.fingerprint,
+            semantic_work_digest: assignment.semantic_work_digest ?? null,
+            candidate_digest: current.candidate?.digest ?? null,
+            active_claim: "ABSENT"
+          },
+          claimant: { execution_attestation: executionAttestation },
+          lease: { mode: "PLATFORM_RUN" },
+          requested_at: "2026-09-18T18:00:00Z",
+          request_id: "local-e2e-" + executionId
+        },
+        acquiredAt: "2026-09-18T18:00:00Z"
+      });
+      assert.equal(acquired.acquired, true);
+      const stateComment = mock.store.comments.find((comment) =>
+        comment.body.includes("agenti-state:v1")
+      );
+      stateComment.body = core.renderStateComment(acquired.state);
+      return { grant: acquired.grant, executionAttestation };
+    };
+
     const billingSource = {
       kind: "ADMIN_POLICY_ATTESTATION",
       trust: "EXTERNAL_CURRENT_EVIDENCE"
@@ -273,6 +307,7 @@ test("local fixture E2E reaches Done through O/A/D/R/H/P without role relay", as
     // A Ready -> D
     let state = stateNow();
     let assignment = runner.assignmentFromState(state, profile);
+    let claim = acquireLocalClaim(assignment, "exec-a-local");
     addNormalized(core.normalizeRoleResult({
       proposal: {
         role: "A",
@@ -291,9 +326,11 @@ test("local fixture E2E reaches Done through O/A/D/R/H/P without role relay", as
       },
       trustedFacts: {
         assignment_id: assignment.assignment_id,
+        claim_id: claim.grant.claim_id,
+        claim_generation: claim.grant.claim_generation,
         observed_state_version: assignment.state.version,
         observed_fingerprint: assignment.state.fingerprint,
-        execution_attestation: attestation(assignment, "exec-a-local"),
+        execution_attestation: claim.executionAttestation,
         actual_billing_mode: assignment.execution_route?.billing_mode ?? null,
         candidate: null
       },
@@ -307,6 +344,7 @@ test("local fixture E2E reaches Done through O/A/D/R/H/P without role relay", as
     // D trusted candidate -> independent R
     state = stateNow();
     assignment = runner.assignmentFromState(state, profile);
+    claim = acquireLocalClaim(assignment, "exec-d-local");
     const member = {
       repository: "example/product",
       pr_number: 7,
@@ -333,9 +371,11 @@ test("local fixture E2E reaches Done through O/A/D/R/H/P without role relay", as
       },
       trustedFacts: {
         assignment_id: assignment.assignment_id,
+        claim_id: claim.grant.claim_id,
+        claim_generation: claim.grant.claim_generation,
         observed_state_version: assignment.state.version,
         observed_fingerprint: assignment.state.fingerprint,
-        execution_attestation: attestation(assignment, "exec-d-local"),
+        execution_attestation: claim.executionAttestation,
         actual_billing_mode: assignment.execution_route?.billing_mode ?? null,
         candidate: { ...member, candidate_digest: candidate.digest },
         change_artifact: {
@@ -356,6 +396,7 @@ test("local fixture E2E reaches Done through O/A/D/R/H/P without role relay", as
     // R approved -> exact H release gate
     state = stateNow();
     assignment = runner.assignmentFromState(state, profile);
+    claim = acquireLocalClaim(assignment, "exec-r-local");
     addNormalized(core.normalizeRoleResult({
       proposal: {
         role: "R",
@@ -374,9 +415,11 @@ test("local fixture E2E reaches Done through O/A/D/R/H/P without role relay", as
       },
       trustedFacts: {
         assignment_id: assignment.assignment_id,
+        claim_id: claim.grant.claim_id,
+        claim_generation: claim.grant.claim_generation,
         observed_state_version: assignment.state.version,
         observed_fingerprint: assignment.state.fingerprint,
-        execution_attestation: attestation(assignment, "exec-r-local"),
+        execution_attestation: claim.executionAttestation,
         actual_billing_mode: assignment.execution_route?.billing_mode ?? null,
         candidate: null
       },
@@ -400,6 +443,7 @@ test("local fixture E2E reaches Done through O/A/D/R/H/P without role relay", as
     // Deterministic P result -> O mechanical Done.
     state = stateNow();
     assignment = runner.assignmentFromState(state, profile);
+    claim = acquireLocalClaim(assignment, "exec-p-local");
     addNormalized(core.normalizeRoleResult({
       proposal: {
         role: "P",
@@ -432,9 +476,11 @@ test("local fixture E2E reaches Done through O/A/D/R/H/P without role relay", as
       },
       trustedFacts: {
         assignment_id: assignment.assignment_id,
+        claim_id: claim.grant.claim_id,
+        claim_generation: claim.grant.claim_generation,
         observed_state_version: assignment.state.version,
         observed_fingerprint: assignment.state.fingerprint,
-        execution_attestation: attestation(assignment, "exec-p-local"),
+        execution_attestation: claim.executionAttestation,
         actual_billing_mode: assignment.execution_route?.billing_mode ?? null,
         candidate: {
           ...state.candidate.members[0],
