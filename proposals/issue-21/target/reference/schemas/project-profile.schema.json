@@ -156,16 +156,15 @@
       }
     },
     "reviewerRunner": {
-      "allOf": [
-        { "$ref": "#/$defs/runner" },
-        {
-          "type": "object",
-          "required": ["independence_mechanism"],
-          "properties": {
-            "independence_mechanism": { "type": "string", "minLength": 1 }
-          }
-        }
-      ]
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter_id", "adapter_version", "capability_profile", "independence_mechanism"],
+      "properties": {
+        "adapter_id": { "type": "string", "minLength": 1 },
+        "adapter_version": { "type": "string", "minLength": 1 },
+        "capability_profile": { "const": "R_READ_REVIEW" },
+        "independence_mechanism": { "type": "string", "minLength": 1 }
+      }
     },
     "identity": {
       "type": "object",
