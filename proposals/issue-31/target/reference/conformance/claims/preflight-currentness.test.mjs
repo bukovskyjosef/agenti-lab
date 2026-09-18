@@ -174,3 +174,45 @@ test("current contract/candidate passes and post-grant drift is detectable befor
     assert.equal(after.current, false);
     assert.equal(after.reason, "CONTRACT_DRIFT_BEFORE_CLAIM");
   }));
+
+test("D without a current candidate binds the exact default-branch SHA", async () =>
+  withRunner(async ({ preClaimCurrentness }) => {
+    const s = state();
+    s.lifecycle = "IN_PROGRESS";
+    s.assignment = {
+      ...s.assignment,
+      assignment_id: "asg-d-current",
+      role: "D",
+      purpose: "IMPLEMENT_CURRENT_CONTRACT",
+      capability_profile: "D_WORKSPACE_WRITE"
+    };
+    const dAssignment = assignment(s);
+    const first = await preClaimCurrentness({
+      github: {
+        repository: "example/product",
+        getIssue: async () => ({ body: "Stable contract" }),
+        getBranch: async () => ({ commit: { sha: "d".repeat(40) } })
+      },
+      runtime,
+      state: s,
+      assignment: dAssignment,
+      comments: []
+    });
+    assert.equal(first.current, true);
+    assert.equal(first.target_binding.kind, "D_BASE");
+    assert.equal(first.target_binding.base_sha, "d".repeat(40));
+
+    const moved = await preClaimCurrentness({
+      github: {
+        repository: "example/product",
+        getIssue: async () => ({ body: "Stable contract" }),
+        getBranch: async () => ({ commit: { sha: "e".repeat(40) } })
+      },
+      runtime,
+      state: s,
+      assignment: dAssignment,
+      comments: []
+    });
+    assert.equal(moved.current, true);
+    assert.notEqual(moved.target_digest, first.target_digest);
+  }));
