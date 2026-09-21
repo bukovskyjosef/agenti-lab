@@ -200,6 +200,15 @@ async function githubDoctor(args){
   }
   const actions=ghJson(["api","repos/"+repo+"/actions/permissions"]);
   if(!actions.enabled) errors.push("GitHub Actions disabled");
+  let workflowPermissions=null;
+  try{
+    workflowPermissions=ghJson(["api","repos/"+repo+"/actions/permissions/workflow"]);
+    if(!workflowPermissions.can_approve_pull_request_reviews){
+      errors.push("GitHub Actions cannot create/approve pull requests; enable repository workflow PR permission");
+    }
+  }catch(error){
+    errors.push("GitHub Actions workflow PR permission not inspectable: "+error.message);
+  }
   if(mapping?.selected_profile==="automated" || mapping?.selected_profile==="single-repo-actions"){
     const expected=await sourcePlan();
     for(const item of expected.filter(x=>x.targetRel.includes(".github/workflows/")||x.targetRel.includes(".agenti-bootstrap/")||x.targetRel==="AGENTS.md"||x.targetRel===".agenti/bootstrap.json")){
@@ -237,6 +246,22 @@ async function setupGithub(args){
   const repo=args.repository??ghJson(["repo","view","--json","nameWithOwner"]).nameWithOwner;
   const actions=ghJson(["api","repos/"+repo+"/actions/permissions"]);
   if(!actions.enabled) throw new Error("NOT_READY: GitHub Actions disabled");
+  const workflowPermissions=ghJson(["api","repos/"+repo+"/actions/permissions/workflow"]);
+  if(!workflowPermissions.can_approve_pull_request_reviews){
+    try{
+      gh([
+        "api","--method","PUT","repos/"+repo+"/actions/permissions/workflow",
+        "-f","default_workflow_permissions="+(workflowPermissions.default_workflow_permissions??"read"),
+        "-F","can_approve_pull_request_reviews=true"
+      ]);
+    }catch(error){
+      throw new Error(
+        "HUMAN_ADMIN_BOUNDARY: cannot enable GitHub Actions PR creation/approval permission for "+
+        repo+". Enable Settings > Actions > General > Workflow permissions > Allow GitHub Actions to create and approve pull requests. "+
+        error.message
+      );
+    }
+  }
   const labels={
     "agenti:managed":"1d76db","agenti:waiting-human":"fbca04","agenti:release-approval":"d93f0b",
     "agenti:blocked":"b60205","agenti:stopped":"5319e7","agenti:done":"0e8a16"
