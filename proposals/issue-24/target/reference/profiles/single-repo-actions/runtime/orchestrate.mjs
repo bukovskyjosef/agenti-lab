@@ -788,6 +788,14 @@ async function applyTransitionSideEffects({
   const runId = process.env.GITHUB_RUN_ID ?? "local-o";
   let next = projectAction(state, action, runId);
 
+  if (action.assignment) {
+    next.assignment = assignmentProjection(
+      action.assignment,
+      Math.max(0, next.state_version - 1),
+      runtime.trustBinding
+    );
+  }
+
   if (state.claim_control?.active_claim) {
     let terminalReason = null;
     let evidenceRef = null;
