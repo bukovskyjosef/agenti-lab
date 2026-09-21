@@ -143,3 +143,15 @@ test("A/R finalize CLI binds run-context to the supplied proposal artifact direc
   );
   assert.match(runner, /contextPath:\s*join\(dirname\(arg4\),\s*"run-context\.json"\)/);
 });
+
+
+test("ordinary transition assignments preserve external trust binding", async () => {
+  const orchestrate = await readFile(
+    join(referenceRoot, "profiles", "single-repo-actions", "runtime", "orchestrate.mjs"),
+    "utf8"
+  );
+  assert.match(
+    orchestrate,
+    /if \(action\.assignment\) \{[\s\S]*?assignmentProjection\([\s\S]*?action\.assignment,[\s\S]*?runtime\.trustBinding[\s\S]*?\);[\s\S]*?\}/
+  );
+});
