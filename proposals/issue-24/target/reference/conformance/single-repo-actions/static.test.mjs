@@ -119,3 +119,18 @@ test("runtime and schemas durably bind product/control plane to assignments", as
   assert.match(runner, /ASSIGNMENT_TRUST_BINDING_STALE/);
   assert.match(runner, /CONTROL_PLANE_PROJECT_MAPPING_MISSING/);
 });
+
+
+test("Claude A/R output uploads preserve hidden workspace artifacts", async () => {
+  for (const [name, artifactName] of [
+    ["agenti-role-a-claude.yml", "agenti-claude-a-output-"],
+    ["agenti-role-r-claude.yml", "agenti-claude-r-output-"]
+  ]) {
+    const body = await read(name);
+    const start = body.indexOf("name: " + artifactName);
+    assert.ok(start >= 0, name + " output artifact block missing");
+    const block = body.slice(start, body.indexOf("\n\n", start));
+    assert.match(block, /path:\s+\.agenti-run/);
+    assert.match(block, /include-hidden-files:\s+true/);
+  }
+});
