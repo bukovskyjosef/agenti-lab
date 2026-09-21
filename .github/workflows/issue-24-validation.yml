@@ -33,13 +33,17 @@ jobs:
       - name: Report release-environment availability without secret values
         env:
           HAS_CLAUDE_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
-          HAS_OPENAI_KEY: ${{ secrets.OPENAI_API_KEY != '' }}
-          E2E_REPOSITORY: ${{ vars.AGENTI_E2E_REPOSITORY }}
+          CONTROL_REPOSITORY: ${{ vars.AGENTI_E2E_CONTROL_REPOSITORY }}
+          PRODUCT_REPOSITORY: ${{ vars.AGENTI_E2E_PRODUCT_REPOSITORY }}
         run: |
           echo "CLAUDE_CODE_OAUTH_TOKEN_PRESENT=$HAS_CLAUDE_OAUTH"
-          echo "OPENAI_API_KEY_PRESENT=$HAS_OPENAI_KEY"
-          if [ -n "$E2E_REPOSITORY" ]; then
-            echo "AGENTI_E2E_REPOSITORY=$E2E_REPOSITORY"
+          if [ -n "$CONTROL_REPOSITORY" ]; then
+            echo "AGENTI_E2E_CONTROL_REPOSITORY=$CONTROL_REPOSITORY"
           else
-            echo "AGENTI_E2E_REPOSITORY=<unset>"
+            echo "AGENTI_E2E_CONTROL_REPOSITORY=<unset>"
+          fi
+          if [ -n "$PRODUCT_REPOSITORY" ]; then
+            echo "AGENTI_E2E_PRODUCT_REPOSITORY=$PRODUCT_REPOSITORY"
+          else
+            echo "AGENTI_E2E_PRODUCT_REPOSITORY=<unset>"
           fi
