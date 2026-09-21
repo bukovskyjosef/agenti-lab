@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   acquireClaimCAS,
@@ -834,7 +835,13 @@ async function main() {
   }
   if (command === "finalize") {
     if (!arg4) throw new Error("proposal path required");
-    await finalizeRun({ role, issueNumber, assignmentId, proposalPath: arg4 });
+    await finalizeRun({
+      role,
+      issueNumber,
+      assignmentId,
+      proposalPath: arg4,
+      contextPath: join(dirname(arg4), "run-context.json")
+    });
     return;
   }
   throw new Error("Usage: runner.mjs prepare|finalize ROLE ISSUE ASSIGNMENT_ID [path]");
