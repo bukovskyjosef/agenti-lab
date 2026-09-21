@@ -36,3 +36,7 @@ No publication or R handoff is allowed until this record is updated with exact s
 4. real-provider smoke for every adapter still advertised as runnable/supported.
 
 Temporary lab validation workflow/metadata is excluded from `target/`.
+
+## Environment readiness recheck
+
+Human confirmed on 2026-09-21 that the two E2E repository variables and the Claude OAuth repository secret are configured. This lab-only record change intentionally triggers a fresh PR validation run so effective GitHub Actions visibility can be verified without exposing secret values.
