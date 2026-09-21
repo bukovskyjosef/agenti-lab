@@ -155,3 +155,12 @@ test("ordinary transition assignments preserve external trust binding", async ()
     /if \(action\.assignment\) \{[\s\S]*?assignmentProjection\([\s\S]*?action\.assignment,[\s\S]*?runtime\.trustBinding[\s\S]*?\);[\s\S]*?\}/
   );
 });
+
+
+test("setup/doctor require Actions PR-creation capability", async () => {
+  const cli = await readFile(join(referenceRoot, "cli", "agenti.mjs"), "utf8");
+  assert.match(cli, /actions\/permissions\/workflow/);
+  assert.match(cli, /can_approve_pull_request_reviews/);
+  assert.match(cli, /GitHub Actions cannot create\/approve pull requests/);
+  assert.match(cli, /HUMAN_ADMIN_BOUNDARY/);
+});
