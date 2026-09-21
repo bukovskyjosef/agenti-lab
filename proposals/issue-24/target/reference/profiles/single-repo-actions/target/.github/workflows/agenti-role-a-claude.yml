@@ -127,6 +127,7 @@ jobs:
           name: agenti-claude-a-output-${{ inputs.assignment_id }}
           path: .agenti-run
           if-no-files-found: error
+          include-hidden-files: true
 
   finalize:
     concurrency:
