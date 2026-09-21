@@ -1109,7 +1109,14 @@ export async function processIssue(issueNumber) {
         loaded.state.assignment.assignment_id
           ? loaded.state.claim_control.active_claim
           : null;
-      if (!roleComment && !claim) {
+      const commands = humanComments(loaded.comments, runtime.projectProfile);
+      const latestTerminalCommand = [...commands].reverse().find(
+        (entry) => entry.command.kind === "stop" || entry.command.kind === "reopen"
+      ) ?? null;
+      const terminalAuthorityPending =
+        (loaded.state.lifecycle !== "STOPPED" && latestTerminalCommand?.command.kind === "stop") ||
+        (loaded.state.lifecycle === "STOPPED" && latestTerminalCommand?.command.kind === "reopen");
+      if (!roleComment && !claim && !terminalAuthorityPending) {
         await ensureAssignmentDispatch(github, runtime, loaded.state, loaded.comments, issueNumber);
         return { status: "DISPATCH_REPAIRED", assignment: loaded.state.assignment.assignment_id };
       }
