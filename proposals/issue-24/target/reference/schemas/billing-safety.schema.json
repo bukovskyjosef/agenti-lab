@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenti.dev/schemas/billing-safety.schema.json",
+  "title": "Agenti provider-neutral billing-safety observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runner_candidate_id",
+    "status",
+    "observed_at",
+    "source",
+    "evidence_digest"
+  ],
+  "properties": {
+    "runner_candidate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "VERIFIED_NO_PAID_SPILLOVER",
+        "PAID_SPILLOVER_POSSIBLE",
+        "UNKNOWN"
+      ]
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "valid_until": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "trust"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "TECHNICAL_ISOLATION",
+            "PROVIDER_API",
+            "PROVIDER_CLI",
+            "ADMIN_POLICY_ATTESTATION"
+          ]
+        },
+        "trust": {
+          "enum": [
+            "MACHINE_VERIFIED",
+            "EXTERNAL_CURRENT_EVIDENCE"
+          ]
+        }
+      }
+    },
+    "evidence_digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenti.dev/schemas/execution-failure.schema.json",
+  "title": "Agenti trusted execution/provider failure evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "failed_assignment_id",
+    "execution_instance_id",
+    "runner_candidate_id",
+    "semantic_work_digest",
+    "capacity_status",
+    "transient",
+    "observed_at",
+    "evidence_digest",
+    "claim_id",
+    "claim_generation"
+  ],
+  "properties": {
+    "failed_assignment_id": {
+      "type": "string",
+      "minLength": 12
+    },
+    "execution_instance_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runner_candidate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "semantic_work_digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "capacity_status": {
+      "enum": [
+        "TEMPORARILY_EXHAUSTED",
+        "RATE_LIMITED",
+        "UNAVAILABLE"
+      ]
+    },
+    "transient": {
+      "type": "boolean"
+    },
+    "objective_retry_reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "retry_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "actual_billing_mode": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        null,
+        "NONE",
+        "INCLUDED_ALLOWANCE",
+        "PREPAID_CREDIT",
+        "METERED"
+      ]
+    },
+    "evidence_digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "claim_id": {
+      "type": "string",
+      "pattern": "^clm-"
+    },
+    "claim_generation": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

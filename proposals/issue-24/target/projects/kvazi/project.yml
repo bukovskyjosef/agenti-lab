@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "project_id": "kvazi",
+  "repository": "bukovskyjosef/kvazi",
+  "selected_profile": "manual",
+  "human_principals": [
+    {
+      "login": "bukovskyjosef",
+      "actor_id": 15156292
+    }
+  ],
+  "product_authority_map": "docs/README.md",
+  "role_control": {
+    "D": {
+      "author_validation": "bash app/tests/pre-push.sh"
+    },
+    "R": {
+      "gate_discovery": ".github/workflows/ci.yml"
+    },
+    "P": {
+      "publication_target": "main",
+      "operations_pointer": "docs/operations/"
+    }
+  },
+  "product_truth_policy": "Task-specific product/domain/runtime sources are resolved from the product Issue and product authority map; this file does not copy their semantics."
+}

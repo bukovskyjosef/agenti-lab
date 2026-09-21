@@ -1,0 +1,28 @@
+{
+  "name": "Agenti multi-repo O",
+  "url": "${PUBLIC_BASE_URL}",
+  "hook_attributes": {
+    "url": "${PUBLIC_BASE_URL}/webhook",
+    "active": true
+  },
+  "redirect_url": "${PUBLIC_BASE_URL}/setup/complete",
+  "public": false,
+  "default_permissions": {
+    "actions": "write",
+    "checks": "read",
+    "contents": "read",
+    "deployments": "read",
+    "issues": "write",
+    "metadata": "read",
+    "pull_requests": "read"
+  },
+  "default_events": [
+    "check_run",
+    "deployment_status",
+    "issue_comment",
+    "issues",
+    "pull_request",
+    "pull_request_review",
+    "workflow_run"
+  ]
+}

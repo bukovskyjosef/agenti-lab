@@ -1,0 +1,41 @@
+name: agenti / reconcile
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  checks: read
+  actions: write
+
+concurrency:
+  group: agenti-reconcile-${{ github.repository_id }}
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Trusted T0 bootstrap
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .agenti-bootstrap/bootstrap-trust.mjs
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Reconcile all managed work
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: node $RUNNER_TEMP/agenti-control/reference/profiles/single-repo-actions/runtime/orchestrate.mjs --all

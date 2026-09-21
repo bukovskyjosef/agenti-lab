@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["role", "status", "result_type", "payload"],
+  "properties": {
+    "role": { "const": "R" },
+    "status": { "enum": ["COMPLETED", "BLOCKED", "FAILED"] },
+    "result_type": { "const": "REVIEWER" },
+    "evidence_refs": { "type": "array", "maxItems": 30 },
+    "human_request": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "DECISION" },
+        "question": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "resolution_route": { "enum": ["ANALYST_REEVALUATE", "RESUME_CURRENT_AFTER_RECHECK"] }
+      },
+      "required": ["type", "question", "resolution_route"]
+    },
+    "retry_or_failure": { "type": ["object", "null"] },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewed_candidate_digest", "reviewed_contract_digest", "outcome", "findings", "correction_owner"],
+      "properties": {
+        "reviewed_candidate_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "reviewed_contract_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "outcome": { "enum": ["APPROVED", "CHANGES_REQUIRED", "DECISION_REQUIRED"] },
+        "findings": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["finding_id", "severity", "disposition", "summary", "evidence_refs", "affected_binding"],
+            "properties": {
+              "finding_id": { "type": "string", "minLength": 1, "maxLength": 80 },
+              "severity": { "enum": ["BLOCKER", "MAJOR", "MINOR", "NIT"] },
+              "disposition": { "enum": ["DEFECT", "DECISION_REQUIRED", "RECOMMENDATION"] },
+              "summary": { "type": "string", "minLength": 1, "maxLength": 4000 },
+              "evidence_refs": { "type": "array", "maxItems": 20 },
+              "affected_binding": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "correction_owner": { "enum": ["A", "D", "H", "NONE"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,212 @@
+name: agenti / A / Claude subscription
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number: { required: true, type: string }
+      assignment_id: { required: true, type: string }
+
+env:
+  AGENTI_REQUIRE_ASSIGNMENT_TRUST: "true"
+
+concurrency:
+  group: agenti-role-${{ inputs.assignment_id }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    concurrency:
+      group: agenti-state-${{ github.repository_id }}-${{ inputs.issue_number }}
+      cancel-in-progress: false
+      queue: max
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      skip: ${{ steps.prepare.outputs.skip }}
+      candidate_ref: ${{ steps.prepare.outputs.candidate_ref }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Trusted T0 bootstrap
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .agenti-bootstrap/bootstrap-trust.mjs
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - id: prepare
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AGENTI_EXPECTED_RUNNER_CANDIDATE: claude-subscription
+        run: node $RUNNER_TEMP/agenti-control/reference/profiles/single-repo-actions/runtime/runner.mjs prepare A "${{ inputs.issue_number }}" "${{ inputs.assignment_id }}" "$RUNNER_TEMP/agenti-run"
+      - if: steps.prepare.outputs.skip != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agenti-context-${{ inputs.assignment_id }}
+          path: ${{ runner.temp }}/agenti-run
+          if-no-files-found: error
+
+  model:
+    needs: preflight
+    if: needs.preflight.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      provider_outcome: ${{ vars.AGENTI_TEST_MODE == 'true' && 'success' || steps.claude.outcome }}
+      capacity_status: ${{ steps.classify.outputs.capacity_status }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Trusted T0 bootstrap
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .agenti-bootstrap/bootstrap-trust.mjs
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: agenti-context-${{ inputs.assignment_id }}
+          path: .agenti-run
+      - name: Fail closed on paid Anthropic API environment
+        shell: bash
+        run: |
+          if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "ANTHROPIC_API_KEY is forbidden for claude-subscription route"
+            exit 1
+          fi
+      - id: schema
+        run: echo "json=$(jq -c . ${{ runner.temp }}/agenti-control/reference/adapters/claude-code-action/schemas/analyst-proposal.schema.json)" >> "$GITHUB_OUTPUT"
+      - if: vars.AGENTI_TEST_MODE == 'true'
+        env:
+          AGENTI_TEST_MODE: "true"
+        run: node $RUNNER_TEMP/agenti-control/reference/profiles/single-repo-actions/runtime/fake-runner.mjs A .agenti-run .agenti-run/proposal.json
+      - id: claude
+        if: vars.AGENTI_TEST_MODE != 'true'
+        continue-on-error: true
+        uses: anthropics/claude-code-action@a4f54ef2c58884867281bd8e2f8d63352ad019a9
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          allowed_bots: "*"
+          prompt: |
+            Read ${{ runner.temp }}/agenti-control/reference/profiles/single-repo-actions/prompts/A.md, .agenti-run/assignment.json and .agenti-run/work-item.md.
+            Execute only that explicit A assignment. Return only the requested structured proposal.
+          claude_args: >-
+            --json-schema '${{ steps.schema.outputs.json }}'
+            --allowedTools Read,Grep,Glob
+      - if: vars.AGENTI_TEST_MODE != 'true' && steps.claude.outcome == 'success'
+        env:
+          STRUCTURED_OUTPUT: ${{ steps.claude.outputs.structured_output }}
+        run: printf '%s\n' "$STRUCTURED_OUTPUT" > .agenti-run/proposal.json
+      - id: classify
+        if: vars.AGENTI_TEST_MODE != 'true' && steps.claude.outcome == 'failure'
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        shell: bash
+        run: |
+          STATUS=""
+          if [ -n "$EXECUTION_FILE" ] && [ -f "$EXECUTION_FILE" ] && grep -Eiq 'rate.?limit|usage.?limit|quota|capacity|exhausted|reset' "$EXECUTION_FILE"; then
+            STATUS="RATE_LIMITED"
+          fi
+          echo "capacity_status=$STATUS" >> "$GITHUB_OUTPUT"
+      - if: vars.AGENTI_TEST_MODE == 'true' || steps.claude.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agenti-claude-a-output-${{ inputs.assignment_id }}
+          path: .agenti-run
+          if-no-files-found: error
+
+  finalize:
+    concurrency:
+      group: agenti-state-${{ github.repository_id }}-${{ inputs.issue_number }}
+      cancel-in-progress: false
+      queue: max
+    needs: [preflight, model]
+    if: needs.preflight.outputs.skip != 'true' && needs.model.outputs.provider_outcome == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: write
+      actions: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Trusted T0 bootstrap
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .agenti-bootstrap/bootstrap-trust.mjs
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: agenti-claude-a-output-${{ inputs.assignment_id }}
+          path: ${{ runner.temp }}/agenti-run
+      - env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: node $RUNNER_TEMP/agenti-control/reference/profiles/single-repo-actions/runtime/runner.mjs finalize A "${{ inputs.issue_number }}" "${{ inputs.assignment_id }}" "$RUNNER_TEMP/agenti-run/proposal.json"
+
+  capacity_failure:
+    concurrency:
+      group: agenti-state-${{ github.repository_id }}-${{ inputs.issue_number }}
+      cancel-in-progress: false
+      queue: max
+    needs: [preflight, model]
+    if: always() && needs.preflight.outputs.skip != 'true' && needs.model.outputs.capacity_status != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: write
+      actions: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Trusted T0 bootstrap
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .agenti-bootstrap/bootstrap-trust.mjs
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: agenti-context-${{ inputs.assignment_id }}
+          path: ${{ runner.temp }}/agenti-run
+      - env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          node $RUNNER_TEMP/agenti-control/reference/profiles/single-repo-actions/runtime/routing-evidence.mjs failure             "${{ inputs.issue_number }}"             "${{ inputs.assignment_id }}"             "${{ needs.model.outputs.capacity_status }}"
+
+  unclassified_failure:
+    needs: [preflight, model]
+    if: always() && needs.preflight.outputs.skip != 'true' && needs.model.outputs.provider_outcome == 'failure' && needs.model.outputs.capacity_status == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - run: |
+          echo "Provider failure was not deterministically classified as a routing/capacity condition."
+          exit 1

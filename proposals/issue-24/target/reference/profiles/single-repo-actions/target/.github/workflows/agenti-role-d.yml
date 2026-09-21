@@ -1,0 +1,140 @@
+name: agenti / D
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number: { required: true, type: string }
+      assignment_id: { required: true, type: string }
+
+env:
+  AGENTI_REQUIRE_ASSIGNMENT_TRUST: "true"
+
+concurrency:
+  group: agenti-role-${{ inputs.assignment_id }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    concurrency:
+      group: agenti-state-${{ github.repository_id }}-${{ inputs.issue_number }}
+      cancel-in-progress: false
+      queue: max
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      skip: ${{ steps.prepare.outputs.skip }}
+      candidate_ref: ${{ steps.prepare.outputs.candidate_ref }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Trusted T0 bootstrap
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .agenti-bootstrap/bootstrap-trust.mjs
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - id: prepare
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node $RUNNER_TEMP/agenti-control/reference/profiles/single-repo-actions/runtime/runner.mjs prepare D "${{ inputs.issue_number }}" "${{ inputs.assignment_id }}" "$RUNNER_TEMP/agenti-run"
+      - if: steps.prepare.outputs.skip != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agenti-context-${{ inputs.assignment_id }}
+          path: ${{ runner.temp }}/agenti-run
+          if-no-files-found: error
+
+  model:
+    needs: preflight
+    if: needs.preflight.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Trusted T0 bootstrap
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .agenti-bootstrap/bootstrap-trust.mjs
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ needs.preflight.outputs.candidate_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: agenti-context-${{ inputs.assignment_id }}
+          path: ${{ runner.temp }}/agenti-run
+      - name: Explicit test-only fake D runner
+        if: vars.AGENTI_TEST_MODE == 'true'
+        env:
+          AGENTI_TEST_MODE: "true"
+        run: node $RUNNER_TEMP/agenti-control/reference/profiles/single-repo-actions/runtime/fake-runner.mjs D "$RUNNER_TEMP/agenti-run" "$RUNNER_TEMP/agenti-run/proposal.json"
+      - if: vars.AGENTI_TEST_MODE != 'true'
+        uses: openai/codex-action@86365089eb2b84e0a8fb0717b304f8bdcb13b20e
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          prompt-file: ${{ runner.temp }}/agenti-control/reference/profiles/single-repo-actions/prompts/D.md
+          output-schema-file: ${{ runner.temp }}/agenti-control/reference/adapters/codex-action/schemas/developer-proposal.schema.json
+          output-file: ${{ runner.temp }}/agenti-run/proposal.json
+          allow-bots: "true"
+      - name: Capture deterministic workspace diff
+        run: |
+          git add -N .
+          git diff --binary > "$RUNNER_TEMP/agenti-run/change.diff"
+          git reset
+          test -s "$RUNNER_TEMP/agenti-run/change.diff"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agenti-d-output-${{ inputs.assignment_id }}
+          path: ${{ runner.temp }}/agenti-run
+          if-no-files-found: error
+
+  candidate_writer:
+    concurrency:
+      group: agenti-state-${{ github.repository_id }}-${{ inputs.issue_number }}
+      cancel-in-progress: false
+      queue: max
+    needs: [preflight, model]
+    if: needs.preflight.outputs.skip != 'true' && needs.model.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Trusted T0 bootstrap
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .agenti-bootstrap/bootstrap-trust.mjs
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: agenti-d-output-${{ inputs.assignment_id }}
+          path: ${{ runner.temp }}/agenti-run
+      - env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          node $RUNNER_TEMP/agenti-control/reference/profiles/single-repo-actions/runtime/candidate-writer.mjs             "${{ inputs.issue_number }}"             "${{ inputs.assignment_id }}"             "$RUNNER_TEMP/agenti-run/proposal.json"             "$RUNNER_TEMP/agenti-run/run-context.json"             "$RUNNER_TEMP/agenti-run/change.diff"

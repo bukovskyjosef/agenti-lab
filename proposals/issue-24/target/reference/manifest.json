@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "package": "agenti-reference",
+  "publication_baseline": "50cc7974ce9fe96237a0cf648e8a90df2f94dab0",
+  "assembled_exact_inputs": {
+    "issue21": "7b155f8abd09f84c0065d64063eee3b2c3dce615",
+    "issue22": "666555f1ad9be4a4b3be3c1e9d78e392febcdeff",
+    "issue23": "0edb4d496fdb64e8a194f97a198dac0a3777e2b1",
+    "issue29": "3fa68aca5717e7f966f42dd976bfd11da71c6732",
+    "issue31": "5465d341bb3e11a75dfdddbb6c1417df82a54652"
+  },
+  "architecture_authority": {
+    "issue40_review": "5761054014",
+    "issue36_review": "5761640047"
+  },
+  "release_proof": {
+    "real_github_e2e": "REQUIRED_BEFORE_PUBLICATION",
+    "candidate_control_surface": "REQUIRED_BEFORE_PUBLICATION",
+    "stale_dispatch": "REQUIRED_BEFORE_PUBLICATION",
+    "live_provider_adapters": "REQUIRED_BEFORE_PUBLICATION"
+  }
+}
