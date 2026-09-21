@@ -134,3 +134,12 @@ test("Claude A/R output uploads preserve hidden workspace artifacts", async () =
     assert.match(block, /include-hidden-files:\s+true/);
   }
 });
+
+
+test("A/R finalize CLI binds run-context to the supplied proposal artifact directory", async () => {
+  const runner = await readFile(
+    join(referenceRoot, "profiles", "single-repo-actions", "runtime", "runner.mjs"),
+    "utf8"
+  );
+  assert.match(runner, /contextPath:\s*join\(dirname\(arg4\),\s*"run-context\.json"\)/);
+});
