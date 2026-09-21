@@ -164,3 +164,17 @@ test("setup/doctor require Actions PR-creation capability", async () => {
   assert.match(cli, /GitHub Actions cannot create\/approve pull requests/);
   assert.match(cli, /HUMAN_ADMIN_BOUNDARY/);
 });
+
+
+test("Human stop/reopen authority outranks pending-assignment dispatch repair", async () => {
+  const orchestrate = await readFile(
+    join(referenceRoot, "profiles", "single-repo-actions", "runtime", "orchestrate.mjs"),
+    "utf8"
+  );
+  assert.match(orchestrate, /latestTerminalCommand/);
+  assert.match(orchestrate, /terminalAuthorityPending/);
+  assert.match(
+    orchestrate,
+    /if \(!roleComment && !claim && !terminalAuthorityPending\) \{[\s\S]*?DISPATCH_REPAIRED/
+  );
+});
