@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "control_plane_repository": "bukovskyjosef/agenti",
+  "locator_marker": "agenti-control-plane",
+  "transport_profile": "single-repo-actions"
+}

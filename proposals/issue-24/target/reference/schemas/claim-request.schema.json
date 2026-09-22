@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenti.local/schemas/claim-request.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "work_item",
+    "assignment_id",
+    "role",
+    "purpose",
+    "expected",
+    "claimant",
+    "requested_at",
+    "request_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "work_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "control_repository",
+        "issue_number"
+      ],
+      "properties": {
+        "control_repository": {
+          "type": "string",
+          "pattern": "^[^/]+/[^/]+$"
+        },
+        "issue_number": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "assignment_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "role": {
+      "enum": [
+        "A",
+        "D",
+        "R",
+        "P"
+      ]
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow_state_version",
+        "claim_version",
+        "assignment_freshness_fingerprint",
+        "active_claim"
+      ],
+      "properties": {
+        "workflow_state_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "claim_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "assignment_freshness_fingerprint": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "semantic_work_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "candidate_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "target_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "active_claim": {
+          "const": "ABSENT"
+        }
+      }
+    },
+    "claimant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution_attestation"
+      ],
+      "properties": {
+        "execution_attestation": {
+          "type": "object"
+        }
+      }
+    },
+    "lease": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "NONE",
+            "PLATFORM_RUN",
+            "EXPIRING_HEARTBEAT"
+          ]
+        },
+        "expires_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "heartbeat_sequence": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "lease_token_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "requested_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

@@ -1,0 +1,70 @@
+name: agenti / O orchestrate
+
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled, closed, reopened]
+  issue_comment:
+    types: [created, edited, deleted]
+  pull_request_target:
+    types: [opened, synchronize, reopened, closed]
+  check_suite:
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Managed issue number; empty means reconcile all
+        required: false
+        type: string
+      wake_kind:
+        description: Non-authoritative wake reason
+        required: false
+        type: string
+      assignment_id:
+        description: Optional callback assignment id
+        required: false
+        type: string
+      result_ref:
+        description: Optional callback result reference
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  checks: read
+  actions: write
+
+concurrency:
+  group: agenti-state-${{ github.repository_id }}-${{ inputs.issue_number || github.event.issue.number || 'reconcile-all' }}
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  orchestrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Trusted T0 bootstrap
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .agenti-bootstrap/bootstrap-trust.mjs
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Fresh reconstruct and evaluate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          AGENTI_ISSUE_NUMBER: ${{ inputs.issue_number || github.event.issue.number || '' }}
+        run: |
+          if [ -n "$AGENTI_ISSUE_NUMBER" ]; then
+            node $RUNNER_TEMP/agenti-control/reference/profiles/single-repo-actions/runtime/orchestrate.mjs "$AGENTI_ISSUE_NUMBER"
+          else
+            node $RUNNER_TEMP/agenti-control/reference/profiles/single-repo-actions/runtime/orchestrate.mjs --all
+          fi

@@ -1,0 +1,16 @@
+{
+  "name": "@agenti/multi-repo-o",
+  "version": "0.1.0-child6",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "render-manifest": "node bin/render-manifest.mjs",
+    "verify-assignment": "node bin/verify-assignment.mjs",
+    "material-operation": "node bin/material-operation.mjs"
+  }
+}

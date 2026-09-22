@@ -1,0 +1,49 @@
+name: Issue 24 release validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "proposals/issue-24/**"
+      - ".github/workflows/issue-24-validation.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-publication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.14.0"
+      - name: Validate assembled exact publication target
+        run: node proposals/issue-24/assemble-and-validate.mjs --docker
+
+  environment-readiness:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Report release-environment availability without secret values
+        env:
+          HAS_CLAUDE_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+          CONTROL_REPOSITORY: ${{ vars.AGENTI_E2E_CONTROL_REPOSITORY }}
+          PRODUCT_REPOSITORY: ${{ vars.AGENTI_E2E_PRODUCT_REPOSITORY }}
+        run: |
+          echo "CLAUDE_CODE_OAUTH_TOKEN_PRESENT=$HAS_CLAUDE_OAUTH"
+          if [ -n "$CONTROL_REPOSITORY" ]; then
+            echo "AGENTI_E2E_CONTROL_REPOSITORY=$CONTROL_REPOSITORY"
+          else
+            echo "AGENTI_E2E_CONTROL_REPOSITORY=<unset>"
+          fi
+          if [ -n "$PRODUCT_REPOSITORY" ]; then
+            echo "AGENTI_E2E_PRODUCT_REPOSITORY=$PRODUCT_REPOSITORY"
+          else
+            echo "AGENTI_E2E_PRODUCT_REPOSITORY=<unset>"
+          fi
