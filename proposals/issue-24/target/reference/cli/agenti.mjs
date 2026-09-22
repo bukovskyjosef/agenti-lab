@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { githubDoctor as effectiveGithubDoctor, setupGithub as effectiveSetupGithub } from "./github-setup.mjs";
 
 const SELF=fileURLToPath(import.meta.url);
 const REFERENCE_ROOT=resolve(dirname(SELF),"..");
@@ -13,7 +14,7 @@ const TARGET_TEMPLATE=join(REFERENCE_ROOT,"profiles",PROFILE_ID,"target");
 
 function parseArgs(argv){
   const out={_:[]};
-  const flags=new Set(["dry-run","force-generated","github","apply","event-policy-confirmed"]);
+  const flags=new Set(["dry-run","force-generated","github","apply"]);
   for(let i=0;i<argv.length;i+=1){
     const arg=argv[i];
     if(!arg.startsWith("--")){out._.push(arg);continue;}
@@ -177,101 +178,8 @@ async function localDoctor(targetRoot){
   }
   return {ok:errors.length===0,errors,manifest};
 }
-async function githubDoctor(args){
-  const errors=[],warnings=[];
-  const repo=args.repository??ghJson(["repo","view","--json","nameWithOwner"]).nameWithOwner;
-  const meta=ghJson(["api","repos/"+repo]);
-  const defaultBranch=meta.default_branch;
-  const productSha=ghJson(["api","repos/"+repo+"/branches/"+encodeURIComponent(defaultBranch)]).commit.sha;
-  const bootstrap=JSON.parse(ghFile(repo,".agenti/bootstrap.json",productSha).toString("utf8"));
-  const agents=ghFile(repo,"AGENTS.md",productSha).toString("utf8");
-  const marker=agents.match(/<!--\s*agenti-control-plane:\s*([^\s]+)\s*-->/i)?.[1];
-  if(!marker || marker!==bootstrap.control_plane_repository) errors.push("trusted bootstrap locator mismatch");
-  const controlRepo=bootstrap.control_plane_repository;
-  const controlMeta=ghJson(["api","repos/"+controlRepo]);
-  const controlSha=ghJson(["api","repos/"+controlRepo+"/branches/"+encodeURIComponent(controlMeta.default_branch)]).commit.sha;
-  const registry=JSON.parse(ghFile(controlRepo,"projects/registry.yml",controlSha).toString("utf8"));
-  const mapping=registry.projects?.[repo];
-  if(!mapping) errors.push("control-plane registry mapping missing for "+repo);
-  let project=null;
-  if(mapping){
-    project=JSON.parse(ghFile(controlRepo,mapping.project_control,controlSha).toString("utf8"));
-    if(project.repository!==repo||project.project_id!==mapping.project_id) errors.push("project-control mapping inconsistent");
-  }
-  const actions=ghJson(["api","repos/"+repo+"/actions/permissions"]);
-  if(!actions.enabled) errors.push("GitHub Actions disabled");
-  let workflowPermissions=null;
-  try{
-    workflowPermissions=ghJson(["api","repos/"+repo+"/actions/permissions/workflow"]);
-    if(!workflowPermissions.can_approve_pull_request_reviews){
-      errors.push("GitHub Actions cannot create/approve pull requests; enable repository workflow PR permission");
-    }
-  }catch(error){
-    errors.push("GitHub Actions workflow PR permission not inspectable: "+error.message);
-  }
-  if(mapping?.selected_profile==="automated" || mapping?.selected_profile==="single-repo-actions"){
-    const expected=await sourcePlan();
-    for(const item of expected.filter(x=>x.targetRel.includes(".github/workflows/")||x.targetRel.includes(".agenti-bootstrap/")||x.targetRel==="AGENTS.md"||x.targetRel===".agenti/bootstrap.json")){
-      let actual;
-      try{actual=ghFile(repo,item.targetRel,productSha);}catch{errors.push("trusted transport missing on default branch: "+item.targetRel);continue;}
-      if(sha256(actual)!==sha256(item.content)) errors.push("trusted transport drift: "+item.targetRel);
-      if(item.targetRel.includes(".github/workflows/")) validateLauncherText(item.targetRel,actual.toString("utf8"),errors);
-    }
-    const runtime=JSON.parse(ghFile(controlRepo,"profiles/automated/single-repo-actions/runtime.json",controlSha).toString("utf8"));
-    const secretNames=new Set(ghJson(["secret","list","--repo",repo,"--json","name"]).map(x=>x.name));
-    for(const name of runtime.runner?.required_secret_names??[]){
-      if(!secretNames.has(name)) errors.push("required provider secret metadata missing: "+name);
-    }
-    const principals=new Set((project?.human_principals??[]).map(x=>Number(x.actor_id)));
-    const claudeSafety=(project?.runner_evidence?.billing_safety??[])
-      .filter(x=>x.runner_candidate_id==="claude-subscription")
-      .sort((a,b)=>Date.parse(b.observed_at??0)-Date.parse(a.observed_at??0))[0];
-    if(!claudeSafety){
-      errors.push("current Claude no-paid-spillover project-control attestation missing");
-    } else {
-      if(claudeSafety.status!=="VERIFIED_NO_PAID_SPILLOVER") errors.push("Claude billing-safety status is not VERIFIED_NO_PAID_SPILLOVER");
-      if(claudeSafety.source?.kind!=="ADMIN_POLICY_ATTESTATION"||claudeSafety.source?.trust!=="EXTERNAL_CURRENT_EVIDENCE") errors.push("Claude billing-safety source is not trusted admin policy evidence");
-      if(!principals.has(Number(claudeSafety.attested_by?.actor_id))) errors.push("Claude billing-safety attestor is not a configured H principal");
-      if(!claudeSafety.attested_by?.evidence_ref) errors.push("Claude billing-safety durable attestation ref missing");
-      if(!claudeSafety.valid_until||Date.parse(claudeSafety.valid_until)<Date.now()) errors.push("Claude billing-safety attestation expired");
-    }
-    if(!args["event-policy-confirmed"]){
-      warnings.push("effective organization/enterprise pull_request_target policy not proven by repository Actions permissions endpoint");
-      errors.push("EVENT_POLICY_NOT_INSPECTABLE: rerun only after authorized policy confirmation or with an integration that can inspect effective higher-level policy");
-    }
-  }
-  return {ok:errors.length===0,errors,warnings,repository:repo,default_branch:defaultBranch,product_bootstrap_sha:productSha,control_plane_repository:controlRepo,control_plane_sha:controlSha,project_id:mapping?.project_id??null,selected_profile:mapping?.selected_profile??null};
-}
-async function setupGithub(args){
-  const repo=args.repository??ghJson(["repo","view","--json","nameWithOwner"]).nameWithOwner;
-  const actions=ghJson(["api","repos/"+repo+"/actions/permissions"]);
-  if(!actions.enabled) throw new Error("NOT_READY: GitHub Actions disabled");
-  const workflowPermissions=ghJson(["api","repos/"+repo+"/actions/permissions/workflow"]);
-  if(!workflowPermissions.can_approve_pull_request_reviews){
-    try{
-      gh([
-        "api","--method","PUT","repos/"+repo+"/actions/permissions/workflow",
-        "-f","default_workflow_permissions="+(workflowPermissions.default_workflow_permissions??"read"),
-        "-F","can_approve_pull_request_reviews=true"
-      ]);
-    }catch(error){
-      throw new Error(
-        "HUMAN_ADMIN_BOUNDARY: cannot enable GitHub Actions PR creation/approval permission for "+
-        repo+". Enable Settings > Actions > General > Workflow permissions > Allow GitHub Actions to create and approve pull requests. "+
-        error.message
-      );
-    }
-  }
-  const labels={
-    "agenti:managed":"1d76db","agenti:waiting-human":"fbca04","agenti:release-approval":"d93f0b",
-    "agenti:blocked":"b60205","agenti:stopped":"5319e7","agenti:done":"0e8a16"
-  };
-  for(const [name,color] of Object.entries(labels)){
-    gh(["label","create",name,"--repo",repo,"--force","--color",color,"--description","Agenti durable state projection"]);
-  }
-  gh(["variable","set","AGENTI_TEST_MODE","--repo",repo,"--body","false"]);
-  console.log(JSON.stringify({repository:repo,status:"AUTO_SETUP_APPLIED",human_boundary:"Confirm effective org/enterprise Actions policy permits trusted pull_request_target; configure required secret values out-of-band."},null,2));
-}
+async function githubDoctor(args){ return effectiveGithubDoctor(args); }
+async function setupGithub(args){ return effectiveSetupGithub(args); }
 async function enroll(args){
   const issue=Number(args.issue??args._[0]);
   if(!Number.isInteger(issue)||issue<=0) throw new Error("enroll requires --issue N");

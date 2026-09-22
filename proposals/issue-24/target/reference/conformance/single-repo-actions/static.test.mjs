@@ -157,12 +157,17 @@ test("ordinary transition assignments preserve external trust binding", async ()
 });
 
 
-test("setup/doctor require Actions PR-creation capability", async () => {
+test("setup/doctor delegate to the effective-state #36 implementation with no caller-asserted event-policy bypass", async () => {
   const cli = await readFile(join(referenceRoot, "cli", "agenti.mjs"), "utf8");
-  assert.match(cli, /actions\/permissions\/workflow/);
-  assert.match(cli, /can_approve_pull_request_reviews/);
-  assert.match(cli, /GitHub Actions cannot create\/approve pull requests/);
-  assert.match(cli, /HUMAN_ADMIN_BOUNDARY/);
+  const setup = await readFile(join(referenceRoot, "cli", "github-setup.mjs"), "utf8");
+  assert.match(cli, /effectiveGithubDoctor/);
+  assert.match(cli, /effectiveSetupGithub/);
+  assert.doesNotMatch(cli, /event-policy-confirmed/);
+  assert.match(setup, /actions\/permissions\/workflow/);
+  assert.match(setup, /actions\/policies\?has_parents=true/);
+  assert.match(setup, /can_approve_pull_request_reviews/);
+  assert.match(setup, /INSUFFICIENT_BOOTSTRAP_CREDENTIAL/);
+  assert.match(setup, /WAITING_HUMAN_APPROVAL/);
 });
 
 

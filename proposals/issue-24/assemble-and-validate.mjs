@@ -77,6 +77,7 @@ try{
     "conformance/claims/preflight-currentness.test.mjs",
     "conformance/claims/material-recovery.test.mjs",
     "conformance/single-repo-actions/static.test.mjs",
+    "conformance/single-repo-actions/setup-doctor.test.mjs",
     "conformance/single-repo-actions/external-control.test.mjs",
     "conformance/single-repo-actions/local-e2e.test.mjs"
   ]) run(process.execPath,["--test",testFile],reference);

@@ -54,9 +54,21 @@ From a fixed published Agenti checkout:
 ```bash
 node reference/cli/agenti.mjs bootstrap --target /path/to/project --repository owner/repo
 # review/commit generated stable transport and publish any required control-plane enrollment
+# plan safe GitHub desired-state changes (no mutation)
 node reference/cli/agenti.mjs setup-github --repository owner/repo
+
+# provide any missing required provider secret through a secure process environment,
+# then apply owned settings/resources and reread effective state
+node reference/cli/agenti.mjs setup-github --repository owner/repo --apply
+
 node reference/cli/agenti.mjs doctor --github --repository owner/repo
 ```
+
+`setup-github` automatically reconciles the safe repository-owned setup surface declared by the trusted control plane: Issues/Actions availability where policy permits, workflow PR capability, merge method, owned labels/variables, the Agenti workflow-event policy, required checks, and any explicitly declared Agenti ruleset, default-branch protection or P environment. It never widens a higher-level Actions allow-list/event security policy. If that policy cannot be inspected or requires an admin decision, setup/doctor report a typed blocker.
+
+Required provider secret values are Human input. Supply each missing secret as a same-named environment variable only for the setup process (for the release-supported route, `CLAUDE_CODE_OAUTH_TOKEN`); setup uploads it via stdin to GitHub and never echoes or persists the value. Doctor verifies metadata/presence only.
+
+`doctor --github` fresh-reads the trusted default branch, exact external control plane and effective GitHub settings. Its machine-readable `status` is `READY`, `NOT_READY` or `WAITING_HUMAN_APPROVAL`; an unverified policy cannot be overridden by a confirmation flag.
 
 For existing work:
 

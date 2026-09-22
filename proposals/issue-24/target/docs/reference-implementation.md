@@ -16,9 +16,11 @@ It does **not** copy mutable governance/core/project-control trees into the prod
 
 ## Bootstrap
 
-`node reference/cli/agenti.mjs bootstrap --repository OWNER/REPO` computes desired state. Directly owned GitHub resources may be applied idempotently. Product/control-plane file changes are generated as governed candidates; bootstrap does not bypass normal publication authority.
+`node reference/cli/agenti.mjs bootstrap --repository OWNER/REPO` generates/reconciles the stable product transport candidate and binds it to the external control plane. Product/control-plane file changes remain governed candidates; bootstrap does not bypass normal publication authority.
 
-Human input is reserved for values or security consent that cannot be derived safely (for example credentials, App ownership/install consent or undeclared release/security policy). Secret values are never written to durable output.
+After that candidate and any control-plane enrollment are trusted on their default branches, `setup-github` is the automation-first desired-state applier. It reads project/profile/runtime truth from one exact `control_plane_sha`, plans before mutating, and with `--apply` performs read → diff → apply → reread/doctor verification for the release-supported single-repo profile. The owned AUTO surface includes Issues/Actions enablement where repository policy permits, workflow PR capability, the declared merge method, `agenti:*` labels, `AGENTI_*` variables, a workflow-scoped Agenti Actions event policy, required-check enforcement when checks are declared, and explicitly declared Agenti ruleset/default-branch-protection/P-environment policy.
+
+Required provider secret names come from the trusted runtime. Missing values are accepted only from same-named process-environment inputs and uploaded through GitHub's secret API; values are sent on stdin and are never printed, persisted in setup output or read back by doctor. Higher-level allowed-actions/event restrictions are inspected, never silently widened. A parent security restriction or an uninspectable effective policy remains a typed Human/credential boundary rather than being bypassed.
 
 ## Effective-state doctor
 
@@ -30,13 +32,16 @@ Human input is reserved for values or security consent that cannot be derived sa
 - stable trusted launcher integrity;
 - O `pull_request_target` metadata wake and absence of privileged ordinary-`pull_request` fallback;
 - role/P `workflow_dispatch` launchers;
-- effective Actions/event/permission constraints where inspectable;
-- O/P privilege separation;
-- required secret metadata only;
-- declared checks/rules/environment integration;
+- effective repository/owner Actions allow-list and workflow-event policy for every pinned release-supported action/workflow;
+- effective workflow PR capability and trusted O/P permission separation;
+- configured merge method and current required-check mapping;
+- declared ruleset/branch-protection and P-environment/protection state when present;
+- exact required `agenti:*` labels and non-secret `AGENTI_*` variables;
+- required provider secret metadata only;
+- schema/runtime/profile compatibility from the same exact control-plane revision;
 - no mutable product-local governance dependency.
 
-Failure is classified rather than silently weakened: missing setup, drift, insufficient bootstrap credential, higher-level policy conflict, unavailable platform capability or pending Human security approval.
+The machine-readable result is `READY`, `NOT_READY` or `WAITING_HUMAN_APPROVAL` and carries individual checks 1–24. Failure is classified rather than silently weakened: missing setup, drift, insufficient bootstrap credential, higher-level policy/security approval, unavailable platform capability or incompatible state. No caller assertion can turn an uninspected event policy into `READY`.
 
 ## Release conformance
 
