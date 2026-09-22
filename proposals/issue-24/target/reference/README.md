@@ -2,7 +2,7 @@
 
 This directory is the version-bound executable implementation shipped with the published Agenti control plane.
 
-It integrates the independently approved core, single-repo Actions profile, multi-repo App, provider-neutral routing/capacity handling and exclusive claim/CAS/fencing model. The final packaging layer binds those parts to the external control-plane ownership and trusted-bootstrap contract.
+It integrates the independently approved core, single-repo Actions profile, retained multi-repo App implementation, provider-neutral routing/capacity handling and exclusive claim/CAS/fencing model. **For this release, only the single-repo Actions profile is release-supported/directly-adoptable; the multi-repo GitHub App profile is retained as experimental / unverified.** The final packaging layer binds those parts to the external control-plane ownership and trusted-bootstrap contract.
 
 ## Authority model
 
@@ -27,7 +27,7 @@ Candidate bootstrap/launcher/tool files cannot govern their own run.
 
 - `core/`, `schemas/` — shared deterministic protocol and contracts.
 - `profiles/single-repo-actions/` — stable product transport + external runtime.
-- `app/multi-repo-o/` — robust GitHub App O reference.
+- `app/multi-repo-o/` — GitHub App O reference retained as **experimental / unverified** in this release; no live App E2E support claim is made.
 - `adapters/` — provider adapters; no provider is normative.
 - `cli/agenti.mjs` — bootstrap/update/effective doctor/enrollment UX.
 - `conformance/`, `test/` — deterministic and release-level conformance assets.
@@ -43,11 +43,11 @@ An assignment alone is insufficient for material execution. The durable O projec
 
 ## Release proof
 
-The package is not publication-ready until the Issue #24 validation record contains:
+The package is not publication-ready until the Issue #24 validation record contains the required evidence for the **release-supported single-repo Actions scope**:
 - deterministic combined suite;
-- real GitHub final-profile E2E;
+- real GitHub single-repo final-profile E2E;
 - malicious candidate control-surface regression;
 - stale default-branch/assignment fail-closed regression;
 - real-provider smoke for every adapter still claimed runnable/supported.
 
-Adapters lacking that live proof must not be advertised as proven runnable/supported.
+Adapters lacking that live proof must not be advertised as proven runnable/supported. The multi-repo GitHub App surface is explicitly excluded from the current release-supported claim and remains experimental/unverified until separately live-verified.
