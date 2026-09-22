@@ -610,6 +610,34 @@ function inspectTransport(ctx,plan){
   }
   return {present,integrity,launcher,launcherErrors};
 }
+function inspectReleaseProviderEvidence(ctx){
+  const selected=new Set();
+  for(const policy of ctx.profile?.execution_routing?.policies??[]){
+    for(const candidate of policy.candidates??[]) selected.add(candidate);
+  }
+  if(!selected.has("claude-subscription")) return true;
+  const principals=new Set((ctx.project?.human_principals??[]).map(item=>Number(item.actor_id)));
+  const evidence=(ctx.project?.runner_evidence?.billing_safety??[])
+    .filter(item=>item.runner_candidate_id==="claude-subscription")
+    .sort((a,b)=>Date.parse(b.observed_at??0)-Date.parse(a.observed_at??0))[0];
+  if(!evidence){
+    return {status:"FAIL",code:"PROVIDER_BILLING_SAFETY_MISSING",detail:"current Claude no-paid-spillover project-control evidence is missing"};
+  }
+  if(evidence.status!=="VERIFIED_NO_PAID_SPILLOVER"){
+    return {status:"FAIL",code:"PROVIDER_BILLING_SAFETY_INVALID",detail:"Claude billing-safety status is not VERIFIED_NO_PAID_SPILLOVER"};
+  }
+  if(evidence.source?.kind!=="ADMIN_POLICY_ATTESTATION"||evidence.source?.trust!=="EXTERNAL_CURRENT_EVIDENCE"){
+    return {status:"FAIL",code:"PROVIDER_BILLING_SAFETY_INVALID",detail:"Claude billing-safety source is not trusted current admin-policy evidence"};
+  }
+  if(!principals.has(Number(evidence.attested_by?.actor_id))||!evidence.attested_by?.evidence_ref){
+    return {status:"FAIL",code:"PROVIDER_BILLING_SAFETY_INVALID",detail:"Claude billing-safety attestation is not bound to a configured H principal and durable evidence"};
+  }
+  if(!evidence.valid_until||Date.parse(evidence.valid_until)<Date.now()){
+    return {status:"FAIL",code:"PROVIDER_BILLING_SAFETY_EXPIRED",detail:"Claude billing-safety evidence is expired"};
+  }
+  return true;
+}
+
 function permissionSplitOk(ctx){
   const o=ghFile(ctx.repo,".github/workflows/agenti-orchestrate.yml",ctx.productSha).toString("utf8");
   const p=ghFile(ctx.repo,".github/workflows/agenti-publish.yml",ctx.productSha).toString("utf8");
@@ -708,6 +736,12 @@ export async function githubDoctor(args={}){
   };
 
   const evaluated=evaluateGithubSnapshot(snapshot);
+  const providerEvidence=inspectReleaseProviderEvidence(ctx);
+  const providerCheck=providerEvidence===true
+    ? {id:"provider-billing-safety",title:"release-supported provider billing-safety evidence",status:"PASS",code:null,detail:null}
+    : {id:"provider-billing-safety",title:"release-supported provider billing-safety evidence",...providerEvidence};
+  const providerFailed=providerCheck.status==="FAIL";
+  const finalStatus=providerFailed?"NOT_READY":evaluated.status;
   return {
     repository:repo,
     default_branch:ctx.defaultBranch,
@@ -727,7 +761,14 @@ export async function githubDoctor(args={}){
       publish_environment:desired.publish_environment?.name??null,
       required_action_uses:actionsUses
     },
-    ...evaluated
+    ...evaluated,
+    ok:evaluated.ok&&!providerFailed,
+    status:finalStatus,
+    errors:[
+      ...evaluated.errors,
+      ...(providerFailed?[(providerCheck.code?providerCheck.code+": ":"")+(providerCheck.detail??providerCheck.title)]:[])
+    ],
+    provider_checks:[providerCheck]
   };
 }
 
