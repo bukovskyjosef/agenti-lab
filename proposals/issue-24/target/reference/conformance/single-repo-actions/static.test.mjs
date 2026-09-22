@@ -178,3 +178,21 @@ test("Human stop/reopen authority outranks pending-assignment dispatch repair", 
     /if \(!roleComment && !claim && !terminalAuthorityPending\) \{[\s\S]*?DISPATCH_REPAIRED/
   );
 });
+
+
+test("Claude structured-output transport strips unsupported top-level $schema metadata", async () => {
+  for (const name of [
+    "agenti-role-a-claude.yml",
+    "agenti-role-d-claude.yml",
+    "agenti-role-r-claude.yml"
+  ]) {
+    const body = await read(name);
+    assert.match(body, /jq -c 'del\(\."\$schema"\)'/);
+  }
+
+  const canonical = JSON.parse(await readFile(
+    join(referenceRoot, "adapters", "claude-code-action", "schemas", "analyst-proposal.schema.json"),
+    "utf8"
+  ));
+  assert.equal(canonical.$schema, "https://json-schema.org/draft/2020-12/schema");
+});
