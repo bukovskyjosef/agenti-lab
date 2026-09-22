@@ -4,7 +4,7 @@ Automated mode uses deterministic O as the sole dispatcher. GitHub events are wa
 
 Reference implementations live under `../../reference/`:
 - default small-project transport: `reference/profiles/single-repo-actions/`;
-- robust multi-repo O: `reference/app/multi-repo-o/`;
+- experimental/unverified multi-repo O: `reference/app/multi-repo-o/`;
 - common schemas/core: `reference/schemas/` and `reference/core/`.
 
 The default single-repo transport leaves only stable bootstrap/launcher assets in the product repository. Mutable governance, core, runner protocol and project-control semantics remain in this pinned external control plane.
