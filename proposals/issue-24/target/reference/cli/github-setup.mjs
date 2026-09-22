@@ -1065,12 +1065,29 @@ export async function setupGithub(args={}){
     blockers
   };
 
+  const preflightStatus=blockers.length
+    ? (blockers.every(item=>item.code==="WAITING_HUMAN_APPROVAL")?"WAITING_HUMAN_APPROVAL":"NOT_READY")
+    : (humanInputs.length?"WAITING_HUMAN_APPROVAL":"PLAN_READY");
+
   if(!args.apply){
-    const status=blockers.length
-      ? (blockers.every(item=>item.code==="WAITING_HUMAN_APPROVAL")?"WAITING_HUMAN_APPROVAL":"NOT_READY")
-      : (humanInputs.length?"WAITING_HUMAN_APPROVAL":"PLAN_READY");
-    const output={...preview,status};
+    const output={...preview,status:preflightStatus};
     console.log(JSON.stringify(output,null,2));
+    return output;
+  }
+
+  if(blockers.length||humanInputs.length){
+    const firstBlocker=blockers[0]??null;
+    const firstInput=humanInputs[0]??null;
+    const output={
+      ...preview,
+      status:preflightStatus,
+      code:firstBlocker?.code??firstInput?.code??"WAITING_HUMAN_APPROVAL",
+      detail:firstBlocker?.detail??(firstInput
+        ? "required Human/security input unresolved: "+firstInput.kind+" "+firstInput.name
+        : "pre-apply prerequisite unresolved")
+    };
+    console.log(JSON.stringify(output,null,2));
+    process.exitCode=1;
     return output;
   }
 
