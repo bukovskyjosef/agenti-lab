@@ -42,7 +42,7 @@ This includes O, claim acquisition, result finalization, D candidate writer, P p
 
 Provider/model compute deliberately runs outside this state fence. Global reconcile performs only issue-specific dispatches; it does not mutate multiple work-item projections while holding a global lock.
 
-## Multi-repo App profile
+## Multi-repo App profile — experimental / unverified in this release
 
 The control repository owns exactly one claim projection for the logical work item. Implementation repositories do not create independent claims.
 
