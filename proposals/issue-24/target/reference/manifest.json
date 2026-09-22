@@ -18,5 +18,17 @@
     "candidate_control_surface": "REQUIRED_BEFORE_PUBLICATION",
     "stale_dispatch": "REQUIRED_BEFORE_PUBLICATION",
     "live_provider_adapters": "REQUIRED_BEFORE_PUBLICATION"
+  },
+  "release_scope": {
+    "release_supported_profiles": [
+      "reference/profiles/single-repo-actions"
+    ],
+    "experimental_unverified_profiles": [
+      "reference/app/multi-repo-o"
+    ],
+    "live_conformance_required_for": [
+      "reference/profiles/single-repo-actions"
+    ],
+    "multi_repo_live_github_app_e2e": "NOT_REQUIRED_FOR_CURRENT_RELEASE"
   }
 }
