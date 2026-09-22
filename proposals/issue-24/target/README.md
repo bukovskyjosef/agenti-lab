@@ -13,7 +13,7 @@ The published commit binds the normative contract, project/profile registry, exe
 - `profiles/automated/` — automated control-plane profile definitions.
 - `projects/registry.yml` — repository-to-project/profile registry.
 - `projects/<project>/project.yml` — project-specific agent-control pointers only.
-- `reference/` — executable schemas, O core, Actions profile, multi-repo App, adapters, bootstrap/doctor and conformance harness.
+- `reference/` — executable schemas, O core, the **release-supported single-repo Actions profile**, provider adapters, bootstrap/doctor and conformance harness; the retained multi-repo GitHub App surface is **experimental / unverified** in this release.
 
 Product/domain/runtime truth remains in each product repository. GitHub Issue/PR state in the product remains the durable work map.
 
