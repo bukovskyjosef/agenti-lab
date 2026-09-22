@@ -40,9 +40,13 @@ Failure is classified rather than silently weakened: missing setup, drift, insuf
 
 ## Release conformance
 
-Publication is gated on deterministic combined tests plus release evidence for:
-- real GitHub final-profile E2E;
-- real-provider smoke for every adapter claimed runnable/supported;
+The **release-supported directly-adoptable profile in this release is the single-repo GitHub Actions profile**.
+
+Publication is gated on deterministic combined tests plus release evidence for that supported scope:
+- real GitHub single-repo final-profile E2E;
+- real-provider smoke for every adapter claimed runnable/supported with that profile;
 - malicious candidate control-surface regression proving candidate launcher/bootstrap/tool changes cannot govern their own run;
 - stale default-branch/assignment dispatch failing before provider/material authority;
-- existing routing, claims/CAS/fencing, stale-candidate, Stop/reopen, recovery and multi-repo invariants.
+- existing routing, claims/CAS/fencing, stale-candidate, Stop/reopen and single-repo recovery invariants.
+
+The retained multi-repo GitHub App implementation and its deterministic/local regression suite are **experimental / unverified** for this release. No live GitHub App/webhook E2E claim is made, and that live proof is not a current publication gate.
