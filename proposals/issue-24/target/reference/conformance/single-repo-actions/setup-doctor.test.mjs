@@ -304,11 +304,47 @@ test("safely fixable GitHub state is planned/applied idempotently and subsequent
   const priorLog=console.log;
   process.env.PATH=bin+":"+prior.PATH;
   process.env.FAKE_GH_STATE=statePath;
-  process.env.CLAUDE_CODE_OAUTH_TOKEN="opaque-test-secret";
+  delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
   process.exitCode=0;
   console.log=()=>{};
 
   try{
+    const beforeMissingSecret=await readFile(statePath,"utf8");
+    const missingSecret=await setupGithub({repository:product,apply:true});
+    assert.equal(missingSecret.status,"WAITING_HUMAN_APPROVAL");
+    assert.equal(missingSecret.code,"MISSING_REQUIRED_SECRET_INPUT");
+    assert.ok(missingSecret.human_inputs.some(item=>item.name==="CLAUDE_CODE_OAUTH_TOKEN"));
+    assert.equal(await readFile(statePath,"utf8"),beforeMissingSecret,"missing Human secret input must cause zero repository mutations");
+    assert.equal(process.exitCode,1);
+    process.exitCode=0;
+
+    process.env.CLAUDE_CODE_OAUTH_TOKEN="opaque-test-secret";
+    const blockedState=JSON.parse(await readFile(statePath,"utf8"));
+    blockedState.parentPolicies[product]=[{
+      id:9001,
+      name:"Parent workflow event restriction",
+      source_type:"Organization",
+      enforcement:"active",
+      conditions:{workflow_path:{include:[".github/workflows/agenti-orchestrate.yml"],exclude:[]}},
+      rules:[{
+        type:"restrict_action_events",
+        parameters:{allowed_events:["issues","issue_comment","check_suite","workflow_dispatch"]}
+      }]
+    }];
+    await writeFile(statePath,JSON.stringify(blockedState,null,2)+"\n");
+    const beforePolicyBlock=await readFile(statePath,"utf8");
+    const policyBlocked=await setupGithub({repository:product,apply:true});
+    assert.equal(policyBlocked.status,"WAITING_HUMAN_APPROVAL");
+    assert.equal(policyBlocked.code,"WAITING_HUMAN_APPROVAL");
+    assert.ok(policyBlocked.blockers.some(item=>/pull_request_target/.test(item.detail)));
+    assert.equal(await readFile(statePath,"utf8"),beforePolicyBlock,"blocked effective parent policy must cause zero repository mutations");
+    assert.equal(process.exitCode,1);
+    process.exitCode=0;
+
+    const resolvedState=JSON.parse(await readFile(statePath,"utf8"));
+    resolvedState.parentPolicies[product]=[];
+    await writeFile(statePath,JSON.stringify(resolvedState,null,2)+"\n");
+
     const plan=await setupGithub({repository:product});
     assert.equal(plan.status,"PLAN_READY");
     assert.ok(plan.plan.some(item=>item.id==="issues"));
