@@ -1,5 +1,7 @@
 # Multi-repo GitHub App O adapter — Child 3
 
+> **Release status: EXPERIMENTAL / UNVERIFIED.** This implementation is retained in the current publication candidate, but it is **not release-supported** and this release makes **no claim of successful live GitHub App/webhook E2E conformance**. Deterministic/local regression coverage remains valuable, but adopters must not treat it as a live deployment proof. The release-supported directly-adoptable profile is `reference/profiles/single-repo-actions/`.
+
 This is the bounded executable adapter from `agenti-lab` Issue #23. It consumes, rather than redefines, the exact R-approved Child #21 core and transition table. In the final integrated package it is expected under `reference/app/multi-repo-o/`; in this lab target the core is loaded from the sibling approved Child #21 target.
 
 ## Boundary
