@@ -87,7 +87,7 @@ jobs:
             exit 1
           fi
       - id: schema
-        run: echo "json=$(jq -c . ${{ runner.temp }}/agenti-control/reference/adapters/claude-code-action/schemas/analyst-proposal.schema.json)" >> "$GITHUB_OUTPUT"
+        run: echo "json=$(jq -c 'del(."$schema")' ${{ runner.temp }}/agenti-control/reference/adapters/claude-code-action/schemas/analyst-proposal.schema.json)" >> "$GITHUB_OUTPUT"
       - if: vars.AGENTI_TEST_MODE == 'true'
         env:
           AGENTI_TEST_MODE: "true"
