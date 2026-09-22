@@ -38,7 +38,7 @@ function methodAndPath(args){
   let method="GET";
   const m=args.indexOf("--method");
   if(m>=0) method=args[m+1];
-  const clean=args.filter((value,index)=>index!==m&&index!==m+1&&value!=="--input"&&args[index-1]!=="--input");
+  const clean=args.filter((value,index)=>(m<0||(index!==m&&index!==m+1))&&value!=="--input"&&args[index-1]!=="--input");
   const path=clean.find(value=>!value.startsWith("-"));
   return {method,path,body:bodyFrom(args)};
 }
