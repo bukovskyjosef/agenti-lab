@@ -26,17 +26,45 @@ node proposals/issue-24/assemble-and-validate.mjs --docker
 
 The assembler checks current `agenti/main` is still the fixed baseline, overlays only `proposals/issue-24/target/`, verifies no publication-surface escape/deletion, and runs the combined core/routing/claims/single-repo/multi-repo/bootstrap/doctor test suite against the assembled publication tree.
 
-## Environment-bound hard gates
+## Current release scope
 
-No publication or R handoff is allowed until this record is updated with exact successful evidence for:
+Human/Product Owner amended the current publication scope on 2026-09-22:
 
-1. real GitHub final-profile E2E;
-2. candidate-control-surface regression;
-3. stale default-branch/assignment fail-closed regression;
-4. real-provider smoke for every adapter still advertised as runnable/supported.
+- **release-supported / mandatory live-conformance profile:** directly-adoptable single-repo GitHub Actions;
+- **multi-repo GitHub App:** experimental / unverified for this release;
+- live multi-repo GitHub App/webhook E2E is **not** a hard gate for this publication;
+- existing multi-repo implementation and deterministic/local tests remain included.
+
+No single-repo/security/provider/review/publication/post-publication requirement is waived.
+
+## Environment-bound hard gates — in-scope evidence
+
+The release-supported single-repo scope has durable successful evidence:
+
+1. **Real GitHub final-profile lifecycle E2E — PASS**
+   - automatic H/O/A/D/R chain reached exact Human release authorization;
+   - Human grant then P publication and fresh O close-out reached mechanical Done;
+   - P run `35657958326` SUCCESS;
+   - post-P O run `35658002808` SUCCESS.
+2. **Candidate-control-surface regression — PASS**
+   - malicious candidate launcher/bootstrap/AGENTS changes did not govern the trusted run;
+   - O run `35658239564` SUCCESS;
+   - trusted role-launcher probe A run `35658322026`.
+3. **Stale default-branch/assignment fail-closed — PASS**
+   - stale assignment bindings failed before provider/material authority;
+   - observed exact `ASSIGNMENT_TRUST_BINDING_STALE` failures with downstream model/material jobs skipped.
+4. **STOPPED terminal replay — PASS**
+   - corrected T16 O run `35659041179` SUCCESS;
+   - replay run `35659237016` SUCCESS with state/version unchanged.
+5. **O/P privilege separation — PASS**
+   - O close-out run `35658002808` had Contents read only;
+   - P run `35657958326` had the separately privileged write path.
+6. **Release-supported real-provider smoke — PASS**
+   - Claude A run `35717617066` SUCCESS;
+   - Claude D run `35717852864` SUCCESS;
+   - independent Claude R run `35718031389` SUCCESS / APPROVED;
+   - Human reject processed by O run `35722915478` SUCCESS with no P dispatch.
+
+The Codex adapter is experimental/unverified and not release-supported. The multi-repo GitHub App is likewise experimental/unverified; deterministic/local coverage remains part of regression validation but no live App E2E claim is made.
 
 Temporary lab validation workflow/metadata is excluded from `target/`.
-
-## Environment readiness recheck
-
-Human confirmed on 2026-09-21 that the two E2E repository variables and the Claude OAuth repository secret are configured. This lab-only record change intentionally triggers a fresh PR validation run so effective GitHub Actions visibility can be verified without exposing secret values.
